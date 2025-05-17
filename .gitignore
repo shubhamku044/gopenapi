@@ -28,7 +28,8 @@ go.work.sum
 .env
 
 # Generated files
-gen/
+# Temporarily allowing gen/ for development
+# gen/
 
 # Temporary build directory
 tmp/

@@ -5,6 +5,14 @@ api:
   description: A simple petstore API example
 
 endpoints:
+  - healthCheck:
+    methods:
+      - type: GET
+        name: healthCheck
+        summary: Health check endpoint
+        response:
+          status: 200
+          description: Health check response
   - path: /pets
     methods:
       - type: GET

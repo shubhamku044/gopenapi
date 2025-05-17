@@ -1,3 +1,4 @@
+// main.go - Command-line interface for gopenapi
 package main
 
 import (
@@ -6,99 +7,115 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/shubhamku044/gopenapi/pkg/generator"
+	"github.com/shubhamku044/gopenapi/internal/generator"
+	"github.com/shubhamku044/gopenapi/internal/output"
+	"github.com/shubhamku044/gopenapi/internal/parser"
 )
 
-func main() {
-	// Check if any command was provided
-	if len(os.Args) < 2 {
-		fmt.Println("Expected 'generate' subcommand")
-		os.Exit(1)
-	}
+const (
+	version = "0.1.0"
+)
 
-	// Handle subcommands
-	switch os.Args[1] {
-	case "generate":
-		handleGenerate(os.Args[2:])
-	default:
-		fmt.Printf("Unknown command: %s\n", os.Args[1])
-		os.Exit(1)
+// convertOutputFiles converts generator.OutputFile slice to output.OutputFile slice
+func convertOutputFiles(files []generator.OutputFile) []output.OutputFile {
+	outputFiles := make([]output.OutputFile, len(files))
+	for i, file := range files {
+		outputFiles[i] = output.OutputFile{
+			Path:    file.Path,
+			Content: file.Content,
+		}
 	}
+	return outputFiles
 }
 
-func handleGenerate(args []string) {
-	if len(args) < 1 {
-		fmt.Println("Expected 'model', 'server', or 'all' subcommand for generate")
+func main() {
+	// Define command-line flags
+	var (
+		inputFile    string
+		outputDir    string
+		packageName  string
+		serverOnly   bool
+		clientOnly   bool
+		templatesDir string
+		showVersion  bool
+	)
+
+	flag.StringVar(&inputFile, "input", "", "Input OpenAPI YAML file (required)")
+	flag.StringVar(&outputDir, "output", "./out", "Output directory for generated code")
+	flag.StringVar(&packageName, "package", "", "Package name for generated code (default: derived from output dir)")
+	flag.BoolVar(&serverOnly, "server-only", false, "Generate server code only")
+	flag.BoolVar(&clientOnly, "client-only", false, "Generate client code only")
+	flag.StringVar(&templatesDir, "templates", "", "Directory containing custom templates")
+	flag.BoolVar(&showVersion, "version", false, "Show version information")
+
+	// Parse the flags
+	flag.Parse()
+
+	// Show version and exit if requested
+	if showVersion {
+		fmt.Printf("gopenapi version %s\n", version)
+		os.Exit(0)
+	}
+
+	// Check for required flags
+	if inputFile == "" {
+		fmt.Println("Error: input file is required")
+		flag.Usage()
 		os.Exit(1)
 	}
 
-	// Define command line flags
-	generateCmd := flag.NewFlagSet("generate", flag.ExitOnError)
-	
-	// Define flags for the generate command
-	var inputFile string
-	var outputDir string
-	generateCmd.StringVar(&inputFile, "input", "", "Path to gopenapi spec file (YAML/JSON)")
-	generateCmd.StringVar(&outputDir, "output", "./gen", "Output directory for generated code")
-
-	// Parse flags after the subcommand
-	generateCmd.Parse(args[1:])
-
-	// Validate required flags
-	if inputFile == "" {
-		fmt.Println("--input flag is required")
-		os.Exit(1)
+	// If package name is not specified, derive it from output directory
+	if packageName == "" {
+		packageName = filepath.Base(outputDir)
 	}
 
 	// Ensure input file exists
 	if _, err := os.Stat(inputFile); os.IsNotExist(err) {
-		fmt.Printf("Input file does not exist: %s\n", inputFile)
+		fmt.Printf("Error: input file %s does not exist\n", inputFile)
+		os.Exit(1)
+	}
+
+	// Parse the OpenAPI specification
+	fmt.Println("Parsing OpenAPI specification...")
+	spec, err := parser.ParseFile(inputFile)
+	if err != nil {
+		fmt.Printf("Error parsing specification: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Create output directory if it doesn't exist
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		fmt.Printf("Failed to create output directory: %s\n", err)
+		fmt.Printf("Error creating output directory: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Create a generator instance
-	gen, err := generator.NewGenerator(inputFile, outputDir)
+	// Configure the generator
+	genConfig := generator.Config{
+		PackageName:  packageName,
+		ServerOnly:   serverOnly,
+		ClientOnly:   clientOnly,
+		TemplatesDir: templatesDir,
+	}
+
+	// Generate the code
+	fmt.Println("Generating code...")
+	files, err := generator.Generate(spec, genConfig)
 	if err != nil {
-		fmt.Printf("Failed to create generator: %s\n", err)
+		fmt.Printf("Error generating code: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Load the gopenapi spec
-	if err := gen.LoadSpec(); err != nil {
-		fmt.Printf("Failed to load spec: %s\n", err)
+	// Write files to disk
+	fmt.Println("Writing files...")
+	writer := output.NewWriter(outputDir)
+	
+	// Convert generator.OutputFile to output.OutputFile
+	outputFiles := convertOutputFiles(files)
+	
+	if err := writer.WriteFiles(outputFiles); err != nil {
+		fmt.Printf("Error writing files: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Handle different generation types
-	switch args[0] {
-	case "model":
-		fmt.Printf("Generating models from %s to %s\n", inputFile, filepath.Join(outputDir, "models"))
-		if err := gen.GenerateModels(); err != nil {
-			fmt.Printf("Failed to generate models: %s\n", err)
-			os.Exit(1)
-		}
-	case "server":
-		fmt.Printf("Generating server code from %s to %s\n", inputFile, outputDir)
-		if err := gen.GenerateServer(); err != nil {
-			fmt.Printf("Failed to generate server: %s\n", err)
-			os.Exit(1)
-		}
-	case "all":
-		fmt.Printf("Generating all code from %s to %s\n", inputFile, outputDir)
-		if err := gen.GenerateAll(); err != nil {
-			fmt.Printf("Failed to generate all components: %s\n", err)
-			os.Exit(1)
-		}
-	default:
-		fmt.Printf("Unknown generate subcommand: %s\n", args[0])
-		os.Exit(1)
-	}
-
-	fmt.Println("Code generation completed successfully!")
+	fmt.Println("Code generation complete!")
 }
