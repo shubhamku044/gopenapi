@@ -1,0 +1,60 @@
+gopenapi: 1.0.0
+api:
+  name: Petstore API
+  version: 1.0.0
+  description: A simple petstore API example
+
+endpoints:
+  - path: /pets
+    methods:
+      - type: GET
+        name: listPets
+        summary: List all pets
+        response:
+          status: 200
+          description: A list of pets
+          type: array
+          items: Pet
+      - type: POST
+        name: createPet
+        summary: Create a pet
+        request:
+          type: Pet
+        response:
+          status: 201
+          description: Pet created
+  - path: /pets/{petId}
+    methods:
+      - type: GET
+        name: getPet
+        summary: Get a pet by ID
+        parameters:
+          - name: petId
+            in: path
+            required: true
+            type: integer
+        response:
+          status: 200
+          description: A pet
+          type: Pet
+
+models:
+  - name: Pet
+    description: A pet in the store
+    required:
+      - id
+      - name
+    properties:
+      - name: id
+        type: integer
+        format: int64
+      - name: name
+        type: string
+      - name: tag
+        type: string
+      - name: status
+        type: string
+        enum:
+          - available
+          - pending
+          - sold
