@@ -37,12 +37,5 @@ That’s where gopenapi comes in.
 Simple CLI usage:
 ```bash
 # Generate Go structs from OpenAPI spec
-gopenapi generate model --input=openapi.yaml --output=./gen/models
-
-# Generate handler + routing stubs
-gopenapi generate server --input=openapi.yaml --output=./gen
-
-# All in one
-gopenapi generate all --input=openapi.yaml --output=./gen
-
+gopenapi generate --spec=./api.yaml --output=./generated
 ```
