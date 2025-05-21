@@ -3,17 +3,19 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/shubhamku044/gopenapi/internal/models"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
 )
 
 // ParseSpecFile parses an OpenAPI specification file (YAML or JSON)
 func ParseSpecFile(filePath string) (*models.OpenAPISpec, error) {
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -74,11 +76,12 @@ func ToCamelCase(s string) string {
 	// Convert snake_case or kebab-case to CamelCase
 	s = strings.ReplaceAll(s, "-", "_")
 	parts := strings.Split(s, "_")
+	
+	// Use cases.Title from golang.org/x/text/cases instead of deprecated strings.Title
+	title := cases.Title(language.English)
 	for i := range parts {
-		if i == 0 {
-			parts[i] = strings.Title(parts[i])
-		} else {
-			parts[i] = strings.Title(parts[i])
+		if len(parts[i]) > 0 {
+			parts[i] = title.String(parts[i])
 		}
 	}
 	return strings.Join(parts, "")

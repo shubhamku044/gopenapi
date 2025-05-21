@@ -4,6 +4,13 @@ info:
   description: A sample API to demonstrate GopenAPI generator
   version: 1.0.0
 paths:
+  /health:
+    get:
+      operationId: health
+      summary: health endpoint
+      responses:
+        '200':
+          description: Successful operation
   /users:
     get:
       operationId: list_users
