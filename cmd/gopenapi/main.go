@@ -21,7 +21,10 @@ type OpenAPISpec struct {
 		Version     string `json:"version" yaml:"version"`
 		Description string `json:"description" yaml:"description"`
 	} `json:"info" yaml:"info"`
-	Paths map[string]map[string]Operation `json:"paths" yaml:"paths"`
+	Paths      map[string]map[string]Operation `json:"paths" yaml:"paths"`
+	Components struct {
+		Schemas map[string]Schema `json:"schemas" yaml:"schemas"`
+	} `json:"components" yaml:"components"`
 }
 
 // Operation represents an API operation
@@ -33,6 +36,7 @@ type Operation struct {
 	Parameters  []Parameter         `json:"parameters" yaml:"parameters"`
 	RequestBody *RequestBody        `json:"requestBody" yaml:"requestBody"`
 	Responses   map[string]Response `json:"responses" yaml:"responses"`
+	Tags        []string            `json:"tags" yaml:"tags"`
 }
 
 // Parameter represents an API parameter
@@ -62,15 +66,25 @@ type Response struct {
 
 // Schema represents a data schema
 type Schema struct {
-	Type       string            `json:"type" yaml:"type"`
-	Format     string            `json:"format" yaml:"format"`
-	Properties map[string]Schema `json:"properties" yaml:"properties"`
-	Ref        string            `json:"$ref" yaml:"$ref"`
+	Type                 string            `json:"type" yaml:"type"`
+	Format               string            `json:"format" yaml:"format"`
+	Properties           map[string]Schema `json:"properties" yaml:"properties"`
+	Items                *Schema           `json:"items" yaml:"items"`
+	Ref                  string            `json:"$ref" yaml:"$ref"`
+	Required             []string          `json:"required" yaml:"required"`
+	Description          string            `json:"description" yaml:"description"`
+	Enum                 []interface{}     `json:"enum" yaml:"enum"`
+	AllOf                []Schema          `json:"allOf" yaml:"allOf"`
+	OneOf                []Schema          `json:"oneOf" yaml:"oneOf"`
+	AnyOf                []Schema          `json:"anyOf" yaml:"anyOf"`
+	Not                  *Schema           `json:"not" yaml:"not"`
+	AdditionalProperties *bool             `json:"additionalProperties" yaml:"additionalProperties"`
 }
 
 func main() {
 	specFile := flag.String("spec", "", "Path to OpenAPI specification file (YAML or JSON)")
 	outputDir := flag.String("output", "./generated", "Output directory for generated code")
+	packageName := flag.String("package", "", "Package name for generated code (optional)")
 	flag.Parse()
 
 	if *specFile == "" {
@@ -89,8 +103,23 @@ func main() {
 		log.Fatalf("Failed to create output directories: %v", err)
 	}
 
+	// Determine package name
+	pkg := *packageName
+	if pkg == "" {
+		// Try to detect from the output directory
+		absPath, err := filepath.Abs(*outputDir)
+		if err == nil {
+			pkg = filepath.Base(filepath.Dir(absPath))
+		}
+
+		// If still empty, use a default
+		if pkg == "" || pkg == "." {
+			pkg = "gopenapi"
+		}
+	}
+
 	// Generate the code
-	err = generateCode(spec, *outputDir)
+	err = generateCode(spec, *outputDir, pkg)
 	if err != nil {
 		log.Fatalf("Failed to generate code: %v", err)
 	}
@@ -118,7 +147,40 @@ func parseSpecFile(filePath string) (*OpenAPISpec, error) {
 		return nil, err
 	}
 
+	// Process the spec to add derived fields
+	processSpec(&spec)
+
 	return &spec, nil
+}
+
+func processSpec(spec *OpenAPISpec) {
+	// Add the HTTP method to each operation
+	for path, methods := range spec.Paths {
+		for method, op := range methods {
+			op.Method = strings.ToUpper(method)
+
+			// Add default tags if none are provided
+			if len(op.Tags) == 0 {
+				op.Tags = []string{"default"}
+			}
+
+			// Handle missing operation IDs
+			if op.OperationID == "" {
+				// Generate a default operationID based on method and path
+				pathParts := strings.Split(strings.Trim(path, "/"), "/")
+				var name string
+				if len(pathParts) > 0 {
+					name = pathParts[len(pathParts)-1]
+				} else {
+					name = "root"
+				}
+				op.OperationID = strings.ToLower(method) + toCamelCase(name)
+			}
+
+			// Update the operation in the map
+			methods[method] = op
+		}
+	}
 }
 
 func createDirectories(baseDir string) error {
@@ -139,9 +201,9 @@ func createDirectories(baseDir string) error {
 	return nil
 }
 
-func generateCode(spec *OpenAPISpec, baseDir string) error {
+func generateCode(spec *OpenAPISpec, baseDir string, packageName string) error {
 	// Generate server
-	err := generateServerFile(spec, baseDir)
+	err := generateServerFile(spec, baseDir, packageName)
 	if err != nil {
 		return err
 	}
@@ -159,7 +221,7 @@ func generateCode(spec *OpenAPISpec, baseDir string) error {
 	}
 
 	// Generate README.md with usage examples
-	err = generateReadme(spec, baseDir)
+	err = generateReadme(spec, baseDir, packageName)
 	if err != nil {
 		return err
 	}
@@ -167,12 +229,12 @@ func generateCode(spec *OpenAPISpec, baseDir string) error {
 	return nil
 }
 
-func generateServerFile(spec *OpenAPISpec, baseDir string) error {
+func generateServerFile(spec *OpenAPISpec, baseDir string, packageName string) error {
 	serverTemplate := `package server
 
 import (
 	"github.com/gin-gonic/gin"
-	"{{.PackageName}}/api"
+	"{{.PackageName}}/generated/api"
 )
 
 // Server represents the API server
@@ -181,12 +243,35 @@ type Server struct {
 	api    api.API
 }
 
+// ServerOption represents a server option function
+type ServerOption func(*Server)
+
+// WithMiddleware adds middleware to the server
+func WithMiddleware(middleware ...gin.HandlerFunc) ServerOption {
+	return func(s *Server) {
+		s.router.Use(middleware...)
+	}
+}
+
+// WithMode sets the gin mode (debug, release, test)
+func WithMode(mode string) ServerOption {
+	return func(s *Server) {
+		gin.SetMode(mode)
+	}
+}
+
 // NewServer creates a new API server
-func NewServer(api api.API) *Server {
+func NewServer(api api.API, options ...ServerOption) *Server {
 	s := &Server{
 		router: gin.Default(),
 		api:    api,
 	}
+	
+	// Apply options
+	for _, option := range options {
+		option(s)
+	}
+	
 	s.setupRoutes()
 	return s
 }
@@ -221,9 +306,6 @@ func (s *Server) setupRoutes() {
 		return err
 	}
 
-	// Use a proper import path for the generated code
-	packageName := "github.com/shubhamku044/gopenapi/generated"
-
 	// Prepare route data
 	type PathParam struct {
 		Name string
@@ -241,9 +323,6 @@ func (s *Server) setupRoutes() {
 	var routes []Route
 	for path, operations := range spec.Paths {
 		for method, op := range operations {
-			// Set the HTTP method in the Operation struct
-			op.Method = strings.Title(strings.ToLower(method))
-			
 			ginPath := convertPathToGin(path)
 			handlerName := toCamelCase(op.OperationID)
 
@@ -259,7 +338,7 @@ func (s *Server) setupRoutes() {
 			}
 
 			routes = append(routes, Route{
-				Method:        strings.ToUpper(method),
+				Method:        strings.Title(strings.ToUpper(method)),
 				Path:          ginPath,
 				HandlerName:   handlerName,
 				PathParams:    pathParams,
@@ -296,7 +375,8 @@ import (
 type API interface {
 	{{range .Handlers}}
 	// {{.HandlerName}} handles {{.Method}} {{.Path}}
-	// {{.Summary}}
+	{{if .Summary}}// {{.Summary}}{{end}}
+	{{if .Description}}// {{.Description}}{{end}}
 	{{.HandlerName}}(c *gin.Context{{if .HasPathParams}}, {{range $index, $param := .PathParams}}{{if $index}}, {{end}}{{.Name}} {{.Type}}{{end}}{{end}})
 	{{end}}
 }
@@ -334,6 +414,7 @@ func (a *DefaultAPI) {{.HandlerName}}(c *gin.Context{{if .HasPathParams}}, {{ran
 		Path          string
 		HandlerName   string
 		Summary       string
+		Description   string
 		PathParams    []PathParam
 		HasPathParams bool
 	}
@@ -353,10 +434,11 @@ func (a *DefaultAPI) {{.HandlerName}}(c *gin.Context{{if .HasPathParams}}, {{ran
 			}
 
 			handlers = append(handlers, Handler{
-				Method:        method,
+				Method:        strings.ToUpper(method),
 				Path:          path,
 				HandlerName:   toCamelCase(op.OperationID),
 				Summary:       op.Summary,
+				Description:   op.Description,
 				PathParams:    pathParams,
 				HasPathParams: len(pathParams) > 0,
 			})
@@ -379,23 +461,61 @@ func (a *DefaultAPI) {{.HandlerName}}(c *gin.Context{{if .HasPathParams}}, {{ran
 }
 
 func generateModels(spec *OpenAPISpec, baseDir string) error {
-	// In a real implementation, you would extract models from spec.Components.Schemas
-	// For this MVP, we'll just create a placeholder models file
-	modelsContent := `package models
+	// For MVP, we'll create a simple models file with placeholders
+	// A complete implementation would parse schemas from spec.Components.Schemas
+	modelsTemplate := `package models
 
 // This file contains the data models for the API
-// In a real implementation, these would be generated based on the schema definitions
+// In a real implementation, these would be fully generated from the schema definitions
 
 // ResponseMessage is a simple response model
 type ResponseMessage struct {
 	Message string ` + "`json:\"message\"`" + `
 }
-`
 
-	return ioutil.WriteFile(filepath.Join(baseDir, "models", "models.go"), []byte(modelsContent), 0644)
+// ErrorResponse represents an API error response
+type ErrorResponse struct {
+	Code    int    ` + "`json:\"code\"`" + `
+	Message string ` + "`json:\"message\"`" + `
 }
 
-func generateReadme(spec *OpenAPISpec, baseDir string) error {
+{{range $name, $schema := .Schemas}}
+// {{$name}} represents a {{$name}} model
+type {{$name}} struct {
+	{{range $propName, $propSchema := $schema.Properties}}
+	{{toCamelCase $propName}} {{getGoType $propSchema}} ` + "`json:\"{{$propName}}\"`" + `
+	{{end}}
+}
+{{end}}
+`
+
+	// Create functions for the template
+	funcMap := template.FuncMap{
+		"toCamelCase": toCamelCase,
+		"getGoType":   func(s Schema) string { return getGoType(s) },
+	}
+
+	tmpl, err := template.New("models").Funcs(funcMap).Parse(modelsTemplate)
+	if err != nil {
+		return err
+	}
+
+	data := struct {
+		Schemas map[string]Schema
+	}{
+		Schemas: spec.Components.Schemas,
+	}
+
+	f, err := os.Create(filepath.Join(baseDir, "models", "models.go"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return tmpl.Execute(f, data)
+}
+
+func generateReadme(spec *OpenAPISpec, baseDir string, packageName string) error {
 	readmeTemplate := `# Generated API for {{.Title}}
 
 This code was generated using GopenAPI for the {{.Title}} API (version {{.Version}}).
@@ -414,8 +534,8 @@ package main
 import (
 	"github.com/gin-gonic/gin"
 	
-	"yourmodule/generated/api"
-	"yourmodule/generated/server"
+	"{{.PackageName}}/generated/api"
+	"{{.PackageName}}/generated/server"
 )
 
 // CustomAPI implements the generated API interface
@@ -447,7 +567,8 @@ package main
 import (
 	"log"
 	
-	"yourmodule/generated/server"
+	"{{.PackageName}}/generated/api"
+	"{{.PackageName}}/generated/server"
 )
 
 func main() {
@@ -473,7 +594,8 @@ package main
 import (
 	"github.com/gin-gonic/gin"
 	
-	"yourmodule/generated/server"
+	"{{.PackageName}}/generated/api"
+	"{{.PackageName}}/generated/server"
 )
 
 func main() {
@@ -488,7 +610,7 @@ func main() {
 	customAPI := &CustomAPI{}
 	
 	// Create the server with your API implementation
-	srv := server.NewServer(customAPI)
+	srv := server.NewServer(customAPI, server.WithMiddleware(loggerMiddleware()))
 	
 	// Get the Gin router from the server and add it to your existing router
 	apiRouter := srv.GetRouter()
@@ -510,11 +632,13 @@ func main() {
 	}
 
 	data := struct {
-		Title   string
-		Version string
+		Title       string
+		Version     string
+		PackageName string
 	}{
-		Title:   spec.Info.Title,
-		Version: spec.Info.Version,
+		Title:       spec.Info.Title,
+		Version:     spec.Info.Version,
+		PackageName: packageName,
 	}
 
 	f, err := os.Create(filepath.Join(baseDir, "README.md"))
@@ -534,25 +658,68 @@ func convertPathToGin(path string) string {
 }
 
 func toCamelCase(s string) string {
-	// Simple implementation - in a real generator, you'd want more robust handling
+	// Convert snake_case or kebab-case to CamelCase
+	s = strings.ReplaceAll(s, "-", "_")
 	parts := strings.Split(s, "_")
 	for i := range parts {
-		parts[i] = strings.Title(parts[i])
+		if i == 0 {
+			parts[i] = strings.Title(parts[i])
+		} else {
+			parts[i] = strings.Title(parts[i])
+		}
 	}
 	return strings.Join(parts, "")
 }
 
 func getGoType(schema Schema) string {
-	// This is a simplified type mapping
-	// In a real implementation, you'd handle more complex types and references
+	// Handle $ref
+	if schema.Ref != "" {
+		// Extract the model name from the reference
+		parts := strings.Split(schema.Ref, "/")
+		return parts[len(parts)-1]
+	}
+
+	// Handle different types
 	switch schema.Type {
 	case "integer":
-		return "int"
+		switch schema.Format {
+		case "int32":
+			return "int32"
+		case "int64":
+			return "int64"
+		default:
+			return "int"
+		}
 	case "number":
-		return "float64"
+		switch schema.Format {
+		case "float":
+			return "float32"
+		case "double":
+			return "float64"
+		default:
+			return "float64"
+		}
 	case "boolean":
 		return "bool"
+	case "string":
+		switch schema.Format {
+		case "byte":
+			return "[]byte"
+		case "binary":
+			return "[]byte"
+		case "date", "date-time":
+			return "time.Time"
+		default:
+			return "string"
+		}
+	case "array":
+		if schema.Items != nil {
+			return "[]" + getGoType(*schema.Items)
+		}
+		return "[]interface{}"
+	case "object":
+		return "map[string]interface{}"
 	default:
-		return "string"
+		return "interface{}"
 	}
 }
