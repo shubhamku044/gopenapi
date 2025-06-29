@@ -54,11 +54,12 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out ./...
-
-      - name: Generate coverage report
-        run: go tool cover -html=coverage.out -o coverage.html
+      - name: Run tests with coverage
+        run: |
+          go test -coverprofile=coverage.out ./... -coverpkg=./cmd/...,./internal/...,./pkg/...
+          go tool cover -html=coverage.out -o coverage.html
+          echo "Coverage summary:"
+          go tool cover -func=coverage.out | tail -1
 
       - name: Upload coverage to Codecov
         if: matrix.go-version == '1.22'

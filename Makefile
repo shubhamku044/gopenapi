@@ -151,9 +151,11 @@ test-race: ## Run tests with race detection
 
 test-coverage: ## Run tests with coverage
 	@echo "$(GREEN)Running tests with coverage...$(RESET)"
-	$(GO) test -coverprofile=coverage.out ./...
+	$(GO) test -coverprofile=coverage.out ./... -coverpkg=./cmd/...,./internal/...,./pkg/...
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "$(GREEN)✓ Coverage report generated: coverage.html$(RESET)"
+	@echo "$(CYAN)Coverage summary:$(RESET)"
+	@$(GO) tool cover -func=coverage.out | tail -1
 
 benchmark: ## Run benchmarks
 	@echo "$(GREEN)Running benchmarks...$(RESET)"

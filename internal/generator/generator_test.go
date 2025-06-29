@@ -3,6 +3,7 @@ package generator
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/shubhamku044/gopenapi/internal/models"
@@ -78,14 +79,14 @@ func TestGenerateCode(t *testing.T) {
 			t.Fatalf("GenerateCode failed: %v", err)
 		}
 
-		// Check that all expected files are generated
+		// Check that all expected files are generated in new structure
 		expectedFiles := []string{
 			"go.mod",
 			"main.go",
-			"api/api.go",
-			"api/implementation.go",
-			"models/models.go",
-			"server/server.go",
+			"handlers/api.go",
+			"generated/api/interfaces.go",
+			"generated/models/models.go",
+			"generated/server/router.go",
 			"README.md",
 		}
 
@@ -129,8 +130,8 @@ func TestGenerateCode(t *testing.T) {
 		}
 	})
 
-	// Test case 3: Generate implementation template only once
-	t.Run("GenerateImplementationOnce", func(t *testing.T) {
+	// Test case 3: Generate handler template only once
+	t.Run("GenerateHandlersOnce", func(t *testing.T) {
 		tempDir := t.TempDir()
 		config := Config{
 			OutputDir:   tempDir,
@@ -138,19 +139,18 @@ func TestGenerateCode(t *testing.T) {
 			ModuleName:  "test/module",
 		}
 
-		// Create api directory
-		apiDir := filepath.Join(tempDir, "api")
-		err := os.MkdirAll(apiDir, 0755)
+		// Create handlers directory and api.go with custom content
+		handlersDir := filepath.Join(tempDir, "handlers")
+		err := os.MkdirAll(handlersDir, 0755)
 		if err != nil {
-			t.Fatalf("Failed to create api directory: %v", err)
+			t.Fatalf("Failed to create handlers directory: %v", err)
 		}
 
-		// Create implementation.go with custom content
-		implPath := filepath.Join(apiDir, "implementation.go")
-		customContent := "// Custom implementation content"
-		err = os.WriteFile(implPath, []byte(customContent), 0600)
+		handlerPath := filepath.Join(handlersDir, "api.go")
+		customContent := "// Custom handler implementation content"
+		err = os.WriteFile(handlerPath, []byte(customContent), 0600)
 		if err != nil {
-			t.Fatalf("Failed to create custom implementation.go: %v", err)
+			t.Fatalf("Failed to create custom api.go: %v", err)
 		}
 
 		err = GenerateCode(spec, config)
@@ -158,13 +158,56 @@ func TestGenerateCode(t *testing.T) {
 			t.Fatalf("GenerateCode failed: %v", err)
 		}
 
-		// Check that implementation.go content is preserved
-		content, err := os.ReadFile(implPath)
+		// Check that handlers/api.go content is preserved
+		content, err := os.ReadFile(handlerPath)
 		if err != nil {
-			t.Fatalf("Failed to read implementation.go: %v", err)
+			t.Fatalf("Failed to read handlers/api.go: %v", err)
 		}
 		if string(content) != customContent {
-			t.Errorf("implementation.go was regenerated when it should have been preserved")
+			t.Errorf("handlers/api.go was regenerated when it should have been preserved")
+		}
+	})
+
+	// Test case 4: Always regenerate files in generated/ directory
+	t.Run("AlwaysRegenerateGenerated", func(t *testing.T) {
+		tempDir := t.TempDir()
+		config := Config{
+			OutputDir:   tempDir,
+			PackageName: "testapi",
+			ModuleName:  "test/module",
+		}
+
+		// Create project structure first
+		err := createProjectStructure(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create project structure: %v", err)
+		}
+
+		// Create interfaces.go with custom content
+		interfacePath := filepath.Join(tempDir, "generated", "api", "interfaces.go")
+		customContent := "// Custom interface content that should be overwritten"
+		err = os.WriteFile(interfacePath, []byte(customContent), 0600)
+		if err != nil {
+			t.Fatalf("Failed to create custom interfaces.go: %v", err)
+		}
+
+		err = GenerateCode(spec, config)
+		if err != nil {
+			t.Fatalf("GenerateCode failed: %v", err)
+		}
+
+		// Check that generated/api/interfaces.go was regenerated
+		content, err := os.ReadFile(interfacePath)
+		if err != nil {
+			t.Fatalf("Failed to read interfaces.go: %v", err)
+		}
+		if string(content) == customContent {
+			t.Errorf("generated/api/interfaces.go was not regenerated when it should have been")
+		}
+
+		// Check it contains expected generated content
+		if !contains(string(content), "type APIHandlers interface") {
+			t.Errorf("interfaces.go does not contain expected generated content")
 		}
 	})
 }
@@ -194,6 +237,11 @@ func TestGenerateGoMod(t *testing.T) {
 	if !contains(string(content), expectedContent) {
 		t.Errorf("go.mod does not contain expected module name")
 	}
+
+	// Check that gin dependency is included
+	if !contains(string(content), "github.com/gin-gonic/gin") {
+		t.Errorf("go.mod does not contain gin dependency")
+	}
 }
 
 func TestCreateDirectories(t *testing.T) {
@@ -201,15 +249,16 @@ func TestCreateDirectories(t *testing.T) {
 
 	err := createProjectStructure(tempDir)
 	if err != nil {
-		t.Fatalf("createDirectories failed: %v", err)
+		t.Fatalf("createProjectStructure failed: %v", err)
 	}
 
-	// Check that all expected directories are created
+	// Check that all expected directories are created with new structure
 	expectedDirs := []string{
 		tempDir,
-		filepath.Join(tempDir, "api"),
-		filepath.Join(tempDir, "models"),
-		filepath.Join(tempDir, "server"),
+		filepath.Join(tempDir, "handlers"),
+		filepath.Join(tempDir, "generated", "api"),
+		filepath.Join(tempDir, "generated", "models"),
+		filepath.Join(tempDir, "generated", "server"),
 	}
 
 	for _, dir := range expectedDirs {
@@ -219,13 +268,30 @@ func TestCreateDirectories(t *testing.T) {
 	}
 }
 
-func TestGenerateImplementationTemplate(t *testing.T) {
+func TestGenerateHandlerTemplates(t *testing.T) {
 	spec := &models.OpenAPISpec{
 		Paths: map[string]map[string]models.Operation{
 			"/users": {
 				"get": models.Operation{
 					OperationID: "list_users",
 					Summary:     "List all users",
+				},
+				"post": models.Operation{
+					OperationID: "create_user",
+					Summary:     "Create a new user",
+				},
+			},
+		},
+		Components: struct {
+			Schemas map[string]models.Schema `json:"schemas" yaml:"schemas"`
+		}{
+			Schemas: map[string]models.Schema{
+				"User": {
+					Type: "object",
+					Properties: map[string]models.Schema{
+						"id":   {Type: "string"},
+						"name": {Type: "string"},
+					},
 				},
 			},
 		},
@@ -234,40 +300,94 @@ func TestGenerateImplementationTemplate(t *testing.T) {
 	tempDir := t.TempDir()
 	moduleName := "test/module"
 
-	// Create api directory
-	apiDir := filepath.Join(tempDir, "api")
-	err := os.MkdirAll(apiDir, 0755)
+	// Create project structure first
+	err := createProjectStructure(tempDir)
 	if err != nil {
-		t.Fatalf("Failed to create api directory: %v", err)
+		t.Fatalf("Failed to create project structure: %v", err)
 	}
 
 	err = GenerateHandlerTemplates(spec, tempDir, moduleName)
 	if err != nil {
-		t.Fatalf("GenerateImplementationTemplate failed: %v", err)
+		t.Fatalf("GenerateHandlerTemplates failed: %v", err)
 	}
 
-	// Check that implementation.go was created
-	implPath := filepath.Join(apiDir, "implementation.go")
-	if _, err := os.Stat(implPath); os.IsNotExist(err) {
-		t.Errorf("implementation.go file was not created")
+	// Check that handlers/api.go was created
+	handlerPath := filepath.Join(tempDir, "handlers", "api.go")
+	if _, err := os.Stat(handlerPath); os.IsNotExist(err) {
+		t.Errorf("handlers/api.go file was not created")
 	}
 
-	// Check implementation.go content
-	content, err := os.ReadFile(implPath)
+	// Check handlers/api.go content
+	content, err := os.ReadFile(handlerPath)
 	if err != nil {
-		t.Fatalf("Failed to read implementation.go: %v", err)
+		t.Fatalf("Failed to read handlers/api.go: %v", err)
 	}
 
 	expectedContent := []string{
-		"package api",
-		"APIImplementation",
+		"package handlers",
+		"APIHandlers",
 		"ListUsers",
+		"CreateUser",
 		"TODO: Implement your business logic",
+		moduleName + "/generated/api",
+		moduleName + "/generated/models",
 	}
 
 	for _, expected := range expectedContent {
 		if !contains(string(content), expected) {
-			t.Errorf("implementation.go does not contain expected content: %s", expected)
+			t.Errorf("handlers/api.go does not contain expected content: %s", expected)
+		}
+	}
+}
+
+func TestGenerateInterfaces(t *testing.T) {
+	spec := &models.OpenAPISpec{
+		Paths: map[string]map[string]models.Operation{
+			"/health": {
+				"get": models.Operation{
+					OperationID: "health_check",
+					Summary:     "Health check",
+				},
+			},
+		},
+	}
+
+	tempDir := t.TempDir()
+	moduleName := "test/module"
+
+	// Create project structure first
+	err := createProjectStructure(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create project structure: %v", err)
+	}
+
+	err = GenerateInterfaces(spec, tempDir, moduleName)
+	if err != nil {
+		t.Fatalf("GenerateInterfaces failed: %v", err)
+	}
+
+	// Check that generated/api/interfaces.go was created
+	interfacePath := filepath.Join(tempDir, "generated", "api", "interfaces.go")
+	if _, err := os.Stat(interfacePath); os.IsNotExist(err) {
+		t.Errorf("generated/api/interfaces.go file was not created")
+	}
+
+	// Check content
+	content, err := os.ReadFile(interfacePath)
+	if err != nil {
+		t.Fatalf("Failed to read interfaces.go: %v", err)
+	}
+
+	expectedContent := []string{
+		"package api",
+		"type APIHandlers interface",
+		"HealthCheck",
+		"github.com/gin-gonic/gin",
+	}
+
+	for _, expected := range expectedContent {
+		if !contains(string(content), expected) {
+			t.Errorf("interfaces.go does not contain expected content: %s", expected)
 		}
 	}
 }
@@ -284,4 +404,784 @@ func containsSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// Test functions with 0% coverage
+func TestGenerateAPIFile(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create the api directory that GenerateAPIFile expects
+	apiDir := filepath.Join(tempDir, "api")
+	err := os.MkdirAll(apiDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create api directory: %v", err)
+	}
+
+	spec := &models.OpenAPISpec{}
+	spec.Info.Title = "Test API"
+	spec.Info.Version = "1.0.0"
+	spec.Paths = map[string]map[string]models.Operation{
+		"/users": {
+			"get": {
+				OperationID: "list_users",
+				Summary:     "List users",
+			},
+			"post": {
+				OperationID: "create_user",
+				Summary:     "Create user",
+			},
+		},
+	}
+
+	err = GenerateAPIFile(spec, tempDir)
+	if err != nil {
+		t.Fatalf("GenerateAPIFile failed: %v", err)
+	}
+
+	// Verify file was created at correct path
+	apiFile := filepath.Join(tempDir, "api", "api.go")
+	if _, err := os.Stat(apiFile); os.IsNotExist(err) {
+		t.Errorf("Expected API file to be created at %s", apiFile)
+	}
+
+	// Verify content
+	content, err := os.ReadFile(apiFile)
+	if err != nil {
+		t.Fatalf("Failed to read API file: %v", err)
+	}
+
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "ListUsers") {
+		t.Errorf("Expected API file to contain ListUsers method")
+	}
+	if !strings.Contains(contentStr, "CreateUser") {
+		t.Errorf("Expected API file to contain CreateUser method")
+	}
+}
+
+func TestGenerateMainFile(t *testing.T) {
+	tempDir := t.TempDir()
+
+	spec := &models.OpenAPISpec{}
+	spec.Info.Title = "Test API"
+	spec.Info.Version = "1.0.0"
+
+	err := GenerateMainFile(spec, tempDir, "testmodule")
+	if err != nil {
+		t.Fatalf("GenerateMainFile failed: %v", err)
+	}
+
+	// Verify file was created
+	mainFile := filepath.Join(tempDir, "main.go")
+	if _, err := os.Stat(mainFile); os.IsNotExist(err) {
+		t.Errorf("Expected main.go to be created at %s", mainFile)
+	}
+
+	// Verify content
+	content, err := os.ReadFile(mainFile)
+	if err != nil {
+		t.Fatalf("Failed to read main.go: %v", err)
+	}
+
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "package main") {
+		t.Errorf("Expected main.go to contain package main")
+	}
+	if !strings.Contains(contentStr, "testmodule") {
+		t.Errorf("Expected main.go to contain module name")
+	}
+}
+
+func TestGenerateServerFile(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create the server directory that GenerateServerFile expects
+	serverDir := filepath.Join(tempDir, "server")
+	err := os.MkdirAll(serverDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create server directory: %v", err)
+	}
+
+	spec := &models.OpenAPISpec{}
+	spec.Info.Title = "Test API"
+	spec.Info.Version = "1.0.0"
+	spec.Paths = map[string]map[string]models.Operation{
+		"/health": {
+			"get": {
+				OperationID: "health_check",
+			},
+		},
+	}
+
+	err = GenerateServerFile(spec, tempDir, "testpkg", "testmodule")
+	if err != nil {
+		t.Fatalf("GenerateServerFile failed: %v", err)
+	}
+
+	// Verify file was created at correct path
+	serverFile := filepath.Join(tempDir, "server", "server.go")
+	if _, err := os.Stat(serverFile); os.IsNotExist(err) {
+		t.Errorf("Expected server file to be created at %s", serverFile)
+	}
+
+	// Verify content
+	content, err := os.ReadFile(serverFile)
+	if err != nil {
+		t.Fatalf("Failed to read server file: %v", err)
+	}
+
+	contentStr := string(content)
+	if !strings.Contains(contentStr, "package server") {
+		t.Errorf("Expected server file to contain package server")
+	}
+}
+
+// Test edge cases for better coverage
+func TestGenerateCodeErrorCases(t *testing.T) {
+	t.Run("InvalidOutputDirectory", func(t *testing.T) {
+		// Try to write to a directory that doesn't exist and can't be created
+		invalidDir := "/invalid/path/that/cannot/be/created"
+
+		spec := &models.OpenAPISpec{}
+		spec.Info.Title = "Test"
+
+		config := Config{
+			OutputDir:   invalidDir,
+			PackageName: "test",
+			ModuleName:  "test",
+		}
+
+		err := GenerateCode(spec, config)
+		if err == nil {
+			t.Errorf("Expected error when using invalid output directory")
+		}
+	})
+}
+
+func TestCreateProjectStructureEdgeCases(t *testing.T) {
+	t.Run("CreateDirectoriesInExistingPath", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Create some directories first
+		handlerDir := filepath.Join(tempDir, "handlers")
+		os.MkdirAll(handlerDir, 0755)
+
+		err := createProjectStructure(tempDir)
+		if err != nil {
+			t.Fatalf("createProjectStructure failed: %v", err)
+		}
+
+		// Verify all directories exist
+		dirs := []string{
+			"handlers",
+			"generated/api",
+			"generated/models",
+			"generated/server",
+		}
+
+		for _, dir := range dirs {
+			dirPath := filepath.Join(tempDir, dir)
+			if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+				t.Errorf("Expected directory %s to exist", dir)
+			}
+		}
+	})
+}
+
+func TestGenerateGoModIfNotExistsEdgeCases(t *testing.T) {
+	t.Run("WithExistingGoMod", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Create existing go.mod
+		existingContent := "module existing/module\n\ngo 1.21"
+		goModPath := filepath.Join(tempDir, "go.mod")
+		err := os.WriteFile(goModPath, []byte(existingContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create existing go.mod: %v", err)
+		}
+
+		err = GenerateGoModIfNotExists(tempDir, "newmodule")
+		if err != nil {
+			t.Fatalf("GenerateGoModIfNotExists failed: %v", err)
+		}
+
+		// Verify original content is preserved
+		content, err := os.ReadFile(goModPath)
+		if err != nil {
+			t.Fatalf("Failed to read go.mod: %v", err)
+		}
+
+		if !strings.Contains(string(content), "existing/module") {
+			t.Errorf("Expected existing go.mod content to be preserved")
+		}
+	})
+}
+
+func TestGenerateUserMainIfNotExistsEdgeCases(t *testing.T) {
+	t.Run("WithExistingMainGo", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Create existing main.go
+		existingContent := "package main\n\n// existing main"
+		mainPath := filepath.Join(tempDir, "main.go")
+		err := os.WriteFile(mainPath, []byte(existingContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create existing main.go: %v", err)
+		}
+
+		spec := &models.OpenAPISpec{}
+		spec.Info.Title = "Test"
+		err = GenerateUserMainIfNotExists(spec, tempDir, "testmodule")
+		if err != nil {
+			t.Fatalf("GenerateUserMainIfNotExists failed: %v", err)
+		}
+
+		// Verify original content is preserved
+		content, err := os.ReadFile(mainPath)
+		if err != nil {
+			t.Fatalf("Failed to read main.go: %v", err)
+		}
+
+		if !strings.Contains(string(content), "existing main") {
+			t.Errorf("Expected existing main.go content to be preserved")
+		}
+	})
+}
+
+func TestGenerateHandlerTemplatesEdgeCases(t *testing.T) {
+	t.Run("WithExistingHandlers", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Create handlers directory with existing file
+		handlerDir := filepath.Join(tempDir, "handlers")
+		os.MkdirAll(handlerDir, 0755)
+
+		existingFile := filepath.Join(handlerDir, "existing.go")
+		err := os.WriteFile(existingFile, []byte("// existing handler"), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create existing handler: %v", err)
+		}
+
+		spec := &models.OpenAPISpec{
+			Paths: map[string]map[string]models.Operation{
+				"/test": {
+					"get": {OperationID: "test_get"},
+				},
+			},
+		}
+
+		err = GenerateHandlerTemplates(spec, tempDir, "testmodule")
+		if err != nil {
+			t.Fatalf("GenerateHandlerTemplates failed: %v", err)
+		}
+
+		// Should not create api.go since handlers directory has files
+		apiFile := filepath.Join(handlerDir, "api.go")
+		if _, err := os.Stat(apiFile); err == nil {
+			t.Errorf("Should not create api.go when handlers directory has existing files")
+		}
+	})
+
+	t.Run("WithEmptyHandlersDirectory", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Create empty handlers directory
+		handlerDir := filepath.Join(tempDir, "handlers")
+		os.MkdirAll(handlerDir, 0755)
+
+		spec := &models.OpenAPISpec{
+			Paths: map[string]map[string]models.Operation{
+				"/users": {
+					"get":  {OperationID: "list_users"},
+					"post": {OperationID: "create_user"},
+				},
+				"/users/{id}": {
+					"get":    {OperationID: "get_user"},
+					"put":    {OperationID: "update_user"},
+					"delete": {OperationID: "delete_user"},
+				},
+			},
+		}
+
+		err := GenerateHandlerTemplates(spec, tempDir, "testmodule")
+		if err != nil {
+			t.Fatalf("GenerateHandlerTemplates failed: %v", err)
+		}
+
+		// Should create api.go
+		apiFile := filepath.Join(handlerDir, "api.go")
+		if _, err := os.Stat(apiFile); os.IsNotExist(err) {
+			t.Errorf("Expected api.go to be created")
+		}
+
+		// Verify content includes all methods
+		content, err := os.ReadFile(apiFile)
+		if err != nil {
+			t.Fatalf("Failed to read api.go: %v", err)
+		}
+
+		contentStr := string(content)
+		methods := []string{"ListUsers", "CreateUser", "GetUser", "UpdateUser", "DeleteUser"}
+		for _, method := range methods {
+			if !strings.Contains(contentStr, method) {
+				t.Errorf("Expected api.go to contain method %s", method)
+			}
+		}
+	})
+}
+
+func TestHasTimeFieldsFunction(t *testing.T) {
+	t.Run("SchemaWithTimeFields", func(t *testing.T) {
+		schema := models.Schema{
+			Type:   "string",
+			Format: "date-time",
+		}
+
+		result := hasTimeFields(schema)
+		if !result {
+			t.Errorf("Expected hasTimeFields to return true for schema with date-time format")
+		}
+	})
+
+	t.Run("SchemaWithDateFields", func(t *testing.T) {
+		schema := models.Schema{
+			Type:   "string",
+			Format: "date",
+		}
+
+		result := hasTimeFields(schema)
+		if !result {
+			t.Errorf("Expected hasTimeFields to return true for schema with date format")
+		}
+	})
+
+	t.Run("SchemaWithTimeFieldsInProperties", func(t *testing.T) {
+		schema := models.Schema{
+			Type: "object",
+			Properties: map[string]models.Schema{
+				"created_at": {Type: "string", Format: "date-time"},
+				"name":       {Type: "string"},
+			},
+		}
+
+		result := hasTimeFields(schema)
+		if !result {
+			t.Errorf("Expected hasTimeFields to return true for schema with date-time fields in properties")
+		}
+	})
+
+	t.Run("SchemaWithoutTimeFields", func(t *testing.T) {
+		schema := models.Schema{
+			Type: "object",
+			Properties: map[string]models.Schema{
+				"name":  {Type: "string"},
+				"email": {Type: "string"},
+			},
+		}
+
+		result := hasTimeFields(schema)
+		if result {
+			t.Errorf("Expected hasTimeFields to return false for schema without date/date-time fields")
+		}
+	})
+
+	t.Run("EmptySchema", func(t *testing.T) {
+		schema := models.Schema{}
+
+		result := hasTimeFields(schema)
+		if result {
+			t.Errorf("Expected hasTimeFields to return false for empty schema")
+		}
+	})
+}
+
+func TestGenerateInterfacesEdgeCases(t *testing.T) {
+	t.Run("SpecWithComplexOperations", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Create the directory structure that GenerateInterfaces expects
+		err := createProjectStructure(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create project structure: %v", err)
+		}
+
+		spec := &models.OpenAPISpec{
+			Paths: map[string]map[string]models.Operation{
+				"/api/v1/users/{user_id}/posts/{post_id}": {
+					"get": {
+						OperationID: "get_user_post_by_id",
+						Parameters: []models.Parameter{
+							{Name: "user_id", In: "path"},
+							{Name: "post_id", In: "path"},
+							{Name: "include", In: "query"},
+						},
+					},
+				},
+			},
+		}
+
+		err = GenerateInterfaces(spec, tempDir, "complex/module")
+		if err != nil {
+			t.Fatalf("GenerateInterfaces failed: %v", err)
+		}
+
+		// Verify file creation
+		interfaceFile := filepath.Join(tempDir, "generated", "api", "interfaces.go")
+		if _, err := os.Stat(interfaceFile); os.IsNotExist(err) {
+			t.Errorf("Expected interfaces.go to be created")
+		}
+	})
+}
+
+func TestGenerateRouterEdgeCases(t *testing.T) {
+	t.Run("SpecWithVariousHTTPMethods", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		// Create the directory structure that GenerateRouter expects
+		err := createProjectStructure(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create project structure: %v", err)
+		}
+
+		spec := &models.OpenAPISpec{
+			Paths: map[string]map[string]models.Operation{
+				"/api/resource": {
+					"get":     {OperationID: "get_resource"},
+					"post":    {OperationID: "create_resource"},
+					"put":     {OperationID: "update_resource"},
+					"delete":  {OperationID: "delete_resource"},
+					"patch":   {OperationID: "patch_resource"},
+					"head":    {OperationID: "head_resource"},
+					"options": {OperationID: "options_resource"},
+				},
+			},
+		}
+
+		err = GenerateRouter(spec, tempDir, "testmodule")
+		if err != nil {
+			t.Fatalf("GenerateRouter failed: %v", err)
+		}
+
+		// Verify file creation
+		routerFile := filepath.Join(tempDir, "generated", "server", "router.go")
+		if _, err := os.Stat(routerFile); os.IsNotExist(err) {
+			t.Errorf("Expected router.go to be created")
+		}
+
+		// Verify content includes all HTTP methods
+		content, err := os.ReadFile(routerFile)
+		if err != nil {
+			t.Fatalf("Failed to read router.go: %v", err)
+		}
+
+		contentStr := string(content)
+		methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+		for _, method := range methods {
+			if !strings.Contains(contentStr, method) {
+				t.Errorf("Expected router.go to contain HTTP method %s", method)
+			}
+		}
+	})
+}
+
+// Additional comprehensive tests to improve coverage
+func TestGenerateModels(t *testing.T) {
+	t.Run("WithTimeFields", func(t *testing.T) {
+		tempDir := t.TempDir()
+		modelsDir := filepath.Join(tempDir, "models")
+		err := os.MkdirAll(modelsDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create models directory: %v", err)
+		}
+
+		spec := &models.OpenAPISpec{
+			Components: struct {
+				Schemas map[string]models.Schema `json:"schemas" yaml:"schemas"`
+			}{
+				Schemas: map[string]models.Schema{
+					"User": {
+						Type: "object",
+						Properties: map[string]models.Schema{
+							"id":         {Type: "string"},
+							"name":       {Type: "string"},
+							"created_at": {Type: "string", Format: "date-time"},
+							"updated_at": {Type: "string", Format: "date"},
+						},
+					},
+					"Post": {
+						Type: "object",
+						Properties: map[string]models.Schema{
+							"title":   {Type: "string"},
+							"content": {Type: "string"},
+						},
+					},
+				},
+			},
+		}
+
+		err = GenerateModels(spec, tempDir)
+		if err != nil {
+			t.Fatalf("GenerateModels failed: %v", err)
+		}
+
+		// Verify file creation
+		modelsFile := filepath.Join(tempDir, "models", "models.go")
+		if _, err := os.Stat(modelsFile); os.IsNotExist(err) {
+			t.Errorf("Expected models.go to be created")
+		}
+
+		// Verify content includes time import
+		content, err := os.ReadFile(modelsFile)
+		if err != nil {
+			t.Fatalf("Failed to read models.go: %v", err)
+		}
+
+		contentStr := string(content)
+		if !strings.Contains(contentStr, `import (`) || !strings.Contains(contentStr, `"time"`) {
+			t.Errorf("Expected models.go to include time import")
+		}
+
+		// Verify structs are generated
+		if !strings.Contains(contentStr, "type User struct") {
+			t.Errorf("Expected User struct to be generated")
+		}
+		if !strings.Contains(contentStr, "type Post struct") {
+			t.Errorf("Expected Post struct to be generated")
+		}
+	})
+
+	t.Run("WithoutTimeFields", func(t *testing.T) {
+		tempDir := t.TempDir()
+		modelsDir := filepath.Join(tempDir, "models")
+		err := os.MkdirAll(modelsDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create models directory: %v", err)
+		}
+
+		spec := &models.OpenAPISpec{
+			Components: struct {
+				Schemas map[string]models.Schema `json:"schemas" yaml:"schemas"`
+			}{
+				Schemas: map[string]models.Schema{
+					"SimpleUser": {
+						Type: "object",
+						Properties: map[string]models.Schema{
+							"id":   {Type: "string"},
+							"name": {Type: "string"},
+						},
+					},
+				},
+			},
+		}
+
+		err = GenerateModels(spec, tempDir)
+		if err != nil {
+			t.Fatalf("GenerateModels failed: %v", err)
+		}
+
+		// Verify content does not include time import
+		content, err := os.ReadFile(filepath.Join(tempDir, "models", "models.go"))
+		if err != nil {
+			t.Fatalf("Failed to read models.go: %v", err)
+		}
+
+		contentStr := string(content)
+		if strings.Contains(contentStr, `"time"`) {
+			t.Errorf("Expected models.go to NOT include time import when no time fields")
+		}
+	})
+}
+
+func TestGenerateReadme(t *testing.T) {
+	tempDir := t.TempDir()
+
+	spec := &models.OpenAPISpec{}
+	spec.Info.Title = "Test API"
+	spec.Info.Version = "1.0.0"
+	spec.Info.Description = "A test API for demonstration"
+	spec.Paths = map[string]map[string]models.Operation{
+		"/users": {
+			"get": {
+				OperationID: "list_users",
+				Summary:     "List all users",
+				Description: "Retrieve a list of all users in the system",
+			},
+			"post": {
+				OperationID: "create_user",
+				Summary:     "Create a new user",
+			},
+		},
+		"/users/{id}": {
+			"get": {
+				OperationID: "get_user",
+				Summary:     "Get user by ID",
+			},
+		},
+	}
+
+	err := GenerateReadme(spec, tempDir, "testapi")
+	if err != nil {
+		t.Fatalf("GenerateReadme failed: %v", err)
+	}
+
+	// Verify file creation
+	readmeFile := filepath.Join(tempDir, "README.md")
+	if _, err := os.Stat(readmeFile); os.IsNotExist(err) {
+		t.Errorf("Expected README.md to be created")
+	}
+
+	// Verify content
+	content, err := os.ReadFile(readmeFile)
+	if err != nil {
+		t.Fatalf("Failed to read README.md: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Check for API info
+	if !strings.Contains(contentStr, "Test API") {
+		t.Errorf("Expected README to contain API title")
+	}
+	if !strings.Contains(contentStr, "A test API for demonstration") {
+		t.Errorf("Expected README to contain API description")
+	}
+
+	// Check for endpoints
+	if !strings.Contains(contentStr, "GET /users") {
+		t.Errorf("Expected README to contain GET /users endpoint")
+	}
+	if !strings.Contains(contentStr, "POST /users") {
+		t.Errorf("Expected README to contain POST /users endpoint")
+	}
+}
+
+func TestGenerateMainFileErrorCases(t *testing.T) {
+	t.Run("InvalidDirectory", func(t *testing.T) {
+		invalidDir := "/invalid/path/that/cannot/be/created"
+
+		spec := &models.OpenAPISpec{}
+		spec.Info.Title = "Test"
+
+		err := GenerateMainFile(spec, invalidDir, "testmodule")
+		if err == nil {
+			t.Errorf("Expected error when using invalid directory")
+		}
+	})
+}
+
+func TestGenerateCodeEdgeCases(t *testing.T) {
+	t.Run("EmptyModuleName", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		spec := &models.OpenAPISpec{}
+		spec.Info.Title = "Test API"
+
+		config := Config{
+			OutputDir:   tempDir,
+			PackageName: "testpkg",
+			// ModuleName is empty - should use PackageName
+		}
+
+		err := GenerateCode(spec, config)
+		if err != nil {
+			t.Fatalf("GenerateCode failed: %v", err)
+		}
+
+		// Verify files were created
+		expectedFiles := []string{
+			"README.md",
+			"generated/models/models.go",
+		}
+
+		for _, file := range expectedFiles {
+			filePath := filepath.Join(tempDir, file)
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				t.Errorf("Expected file %s to be created", file)
+			}
+		}
+	})
+}
+
+func TestHasTimeFieldsRecursive(t *testing.T) {
+	t.Run("TimeFieldsInArrayItems", func(t *testing.T) {
+		schema := models.Schema{
+			Type: "array",
+			Items: &models.Schema{
+				Type:   "string",
+				Format: "date-time",
+			},
+		}
+
+		result := hasTimeFields(schema)
+		if !result {
+			t.Errorf("Expected hasTimeFields to return true for array with date-time items")
+		}
+	})
+
+	t.Run("NestedTimeFields", func(t *testing.T) {
+		schema := models.Schema{
+			Type: "object",
+			Properties: map[string]models.Schema{
+				"user": {
+					Type: "object",
+					Properties: map[string]models.Schema{
+						"profile": {
+							Type: "object",
+							Properties: map[string]models.Schema{
+								"created_at": {Type: "string", Format: "date"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := hasTimeFields(schema)
+		if !result {
+			t.Errorf("Expected hasTimeFields to return true for nested time fields")
+		}
+	})
+}
+
+func TestGenerateUserMainIfNotExistsComprehensive(t *testing.T) {
+	t.Run("WithNewMainGo", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		spec := &models.OpenAPISpec{}
+		spec.Info.Title = "New API"
+		spec.Info.Description = "A new API"
+
+		err := GenerateUserMainIfNotExists(spec, tempDir, "newmodule/api")
+		if err != nil {
+			t.Fatalf("GenerateUserMainIfNotExists failed: %v", err)
+		}
+
+		// Verify file was created
+		mainPath := filepath.Join(tempDir, "main.go")
+		if _, err := os.Stat(mainPath); os.IsNotExist(err) {
+			t.Errorf("Expected main.go to be created")
+		}
+
+		// Verify content includes module name
+		content, err := os.ReadFile(mainPath)
+		if err != nil {
+			t.Fatalf("Failed to read main.go: %v", err)
+		}
+
+		contentStr := string(content)
+		if !strings.Contains(contentStr, "newmodule/api") {
+			t.Errorf("Expected main.go to contain correct module name")
+		}
+
+		// Verify it contains proper imports and structure
+		if !strings.Contains(contentStr, "package main") {
+			t.Errorf("Expected main.go to have package main")
+		}
+		if !strings.Contains(contentStr, "func main()") {
+			t.Errorf("Expected main.go to have main function")
+		}
+		if !strings.Contains(contentStr, "graceful shutdown") {
+			t.Errorf("Expected main.go to have graceful shutdown comment")
+		}
+	})
 }
