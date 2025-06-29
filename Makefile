@@ -32,7 +32,7 @@ RESET := \033[0m
 
 .PHONY: help build install uninstall clean test lint fmt vet deps update-deps \
         generate-sample run-sample docker-build release cross-compile \
-        dev-setup check all run-generated build-generated
+        dev-setup check all run-generated build-generated release-check tag-release
 
 # Default target
 all: clean fmt vet test build
@@ -50,6 +50,18 @@ help: ## Show this help message
 	@echo "  make run-example             # Build and run the example server"
 	@echo "  make dev-setup               # Set up development environment"
 	@echo "  make release                 # Build for all platforms"
+	@echo ""
+	@echo "$(GREEN)Development targets:$(RESET)"
+	@echo "  make test                    # Run all tests"
+	@echo "  make test-coverage           # Run tests with coverage"
+	@echo "  make lint                    # Run linter"
+	@echo "  make fmt                     # Format code"
+	@echo "  make clean                   # Clean build artifacts"
+	@echo ""
+	@echo "$(GREEN)Release targets:$(RESET)"
+	@echo "  make release-check           # Run pre-release checks"
+	@echo "  make release                 # Build release binaries for all platforms"
+	@echo "  make tag-release             # Create and push a new git tag"
 
 # Build targets
 build: ## Build the gopenapi binary
@@ -183,17 +195,35 @@ cross-compile: ## Build for all platforms
 	done
 	@echo "$(GREEN)✓ Cross-compilation complete$(RESET)"
 
-release: clean check cross-compile ## Build release artifacts for all platforms
-	@echo "$(GREEN)Creating release artifacts...$(RESET)"
-	@cd $(BUILD_DIR)/releases && \
-	for binary in *; do \
-		if [ "$$binary" != "*" ]; then \
-			echo "Creating archive for $$binary..."; \
-			tar -czf "$$binary.tar.gz" "$$binary"; \
-		fi \
+release: release-check
+	@echo "🚀 Building release binaries..."
+	@mkdir -p bin/releases
+	@for os in linux darwin windows; do \
+		for arch in amd64 arm64; do \
+			if [ "$$os" = "windows" ] && [ "$$arch" = "arm64" ]; then continue; fi; \
+			echo "Building $$os/$$arch..."; \
+			GOOS=$$os GOARCH=$$arch go build -ldflags="-s -w" -o bin/releases/gopenapi-$$os-$$arch ./cmd/gopenapi; \
+			if [ "$$os" = "windows" ]; then \
+				mv bin/releases/gopenapi-$$os-$$arch bin/releases/gopenapi-$$os-$$arch.exe; \
+			fi; \
+		done; \
 	done
-	@echo "$(GREEN)✓ Release artifacts created in $(BUILD_DIR)/releases/$(RESET)"
-	@ls -la $(BUILD_DIR)/releases/
+	@echo "✅ Release binaries built in bin/releases/"
+
+tag-release:
+	@echo "📋 Current tags:"
+	@git tag | tail -5
+	@echo ""
+	@read -p "Enter new version (e.g., v1.0.0): " version; \
+	git tag $$version && \
+	git push origin $$version && \
+	echo "✅ Tagged and pushed $$version"
+
+release-check:
+	@echo "🔍 Pre-release checks..."
+	@$(MAKE) test
+	@$(MAKE) lint
+	@echo "✅ All checks passed"
 
 # Docker targets
 docker-build: ## Build Docker image

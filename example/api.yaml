@@ -68,6 +68,13 @@ paths:
       responses:
         '200':
           description: Successful operation
+  /error:
+    get:
+      operationId: error
+      summary: Error endpoint
+      responses:
+        '500':
+          description: Internal server error
 components:
   schemas:
     User:

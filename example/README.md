@@ -54,33 +54,6 @@ func NewAPIHandlers() api.APIHandlers {
 }
 
 
-// Ping Ping endpoint
-func (h *APIHandlers) Ping(c *gin.Context) {
-    // TODO: Implement your business logic here
-    c.JSON(http.StatusOK, gin.H{
-        "data": []interface{}{}, // Return your data here
-    })
-}
-
-
-// Health health endpoint
-func (h *APIHandlers) Health(c *gin.Context) {
-    // TODO: Implement your business logic here
-    c.JSON(http.StatusOK, gin.H{
-        "data": []interface{}{}, // Return your data here
-    })
-}
-
-
-// ListUsers List all users
-func (h *APIHandlers) ListUsers(c *gin.Context) {
-    // TODO: Implement your business logic here
-    c.JSON(http.StatusOK, gin.H{
-        "data": []interface{}{}, // Return your data here
-    })
-}
-
-
 // CreateUser Create a new user
 func (h *APIHandlers) CreateUser(c *gin.Context) {
     // TODO: Implement your business logic here
@@ -96,6 +69,15 @@ func (h *APIHandlers) CreateUser(c *gin.Context) {
 }
 
 
+// ListUsers List all users
+func (h *APIHandlers) ListUsers(c *gin.Context) {
+    // TODO: Implement your business logic here
+    c.JSON(http.StatusOK, gin.H{
+        "data": []interface{}{}, // Return your data here
+    })
+}
+
+
 // GetUser Get user by ID
 func (h *APIHandlers) GetUser(c *gin.Context, id string) {
     // TODO: Implement your business logic here
@@ -103,6 +85,33 @@ func (h *APIHandlers) GetUser(c *gin.Context, id string) {
     c.JSON(http.StatusOK, gin.H{
         "id": id,
         "data": "your data here",
+    })
+}
+
+
+// Ping Ping endpoint
+func (h *APIHandlers) Ping(c *gin.Context) {
+    // TODO: Implement your business logic here
+    c.JSON(http.StatusOK, gin.H{
+        "data": []interface{}{}, // Return your data here
+    })
+}
+
+
+// Error Error endpoint
+func (h *APIHandlers) Error(c *gin.Context) {
+    // TODO: Implement your business logic here
+    c.JSON(http.StatusOK, gin.H{
+        "data": []interface{}{}, // Return your data here
+    })
+}
+
+
+// Health health endpoint
+func (h *APIHandlers) Health(c *gin.Context) {
+    // TODO: Implement your business logic here
+    c.JSON(http.StatusOK, gin.H{
+        "data": []interface{}{}, // Return your data here
     })
 }
 
@@ -121,15 +130,11 @@ The server will start on port 8080 (or the port specified in the `PORT` environm
 ### 3. Test Your API
 
 
-**GET /ping** - Ping endpoint
+**POST /users** - Create a new user
 ```bash
-curl -X GET http://localhost:8080/ping
-```
-
-
-**GET /health** - health endpoint
-```bash
-curl -X GET http://localhost:8080/health
+curl -X POST http://localhost:8080/users \
+  -H "Content-Type: application/json" \
+  -d '{}'
 ```
 
 
@@ -139,17 +144,27 @@ curl -X GET http://localhost:8080/users
 ```
 
 
-**POST /users** - Create a new user
-```bash
-curl -X POST http://localhost:8080/users \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
-
-
 **GET /users/{id}** - Get user by ID
 ```bash
 curl -X GET http://localhost:8080/users/{id}
+```
+
+
+**GET /ping** - Ping endpoint
+```bash
+curl -X GET http://localhost:8080/ping
+```
+
+
+**GET /error** - Error endpoint
+```bash
+curl -X GET http://localhost:8080/error
+```
+
+
+**GET /health** - health endpoint
+```bash
+curl -X GET http://localhost:8080/health
 ```
 
 
@@ -176,32 +191,18 @@ When you modify your OpenAPI specification:
 ## 📚 API Reference
 
 
-### GET /ping
+### POST /users
 
-**Ping endpoint**
+**Create a new user**
 
-
-
-
+Creates a new user in the system
 
 
 
-**Response:**
+**Request Body:**
 ```json
-{"message": "success"}
+{"key": "value"}
 ```
-
----
-
-
-### GET /health
-
-**health endpoint**
-
-
-
-
-
 
 
 **Response:**
@@ -230,18 +231,18 @@ Returns a list of users
 ---
 
 
-### POST /users
+### GET /users/{id}
 
-**Create a new user**
+**Get user by ID**
 
-Creates a new user in the system
+Returns a single user by ID
+
+**Path Parameters:**
+
+- `id` (string) - User ID
 
 
 
-**Request Body:**
-```json
-{"key": "value"}
-```
 
 
 **Response:**
@@ -252,15 +253,47 @@ Creates a new user in the system
 ---
 
 
-### GET /users/{id}
+### GET /ping
 
-**Get user by ID**
+**Ping endpoint**
 
-Returns a single user by ID
 
-**Path Parameters:**
 
-- `id` (string) - User ID
+
+
+
+
+**Response:**
+```json
+{"message": "success"}
+```
+
+---
+
+
+### GET /error
+
+**Error endpoint**
+
+
+
+
+
+
+
+**Response:**
+```json
+{"message": "success"}
+```
+
+---
+
+
+### GET /health
+
+**health endpoint**
+
+
 
 
 
@@ -335,10 +368,10 @@ func NewAPIHandlers(db *sql.DB) api.APIHandlers {
 
 ```go
 type User struct {
-    Id string `json:"id"`
-    Name string `json:"name"`
     Email string `json:"email"`
     CreatedAt time.Time `json:"created_at"`
+    Id string `json:"id"`
+    Name string `json:"name"`
 }
 ```
 
