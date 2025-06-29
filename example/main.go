@@ -16,17 +16,17 @@ import (
 func main() {
 	// Create handler implementation
 	apiHandlers := handlers.NewAPIHandlers()
-	
+
 	// Create server with handlers
 	srv := server.NewServer(apiHandlers)
-	
+
 	// Start server in a goroutine
 	go func() {
 		port := os.Getenv("PORT")
 		if port == "" {
 			port = "8080"
 		}
-		
+
 		log.Printf("Server starting on port %s", port)
 		if err := srv.Start(":" + port); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed to start: %v", err)
@@ -42,7 +42,7 @@ func main() {
 	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	
+
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatal("Server forced to shutdown:", err)
 	}
