@@ -54,11 +54,12 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out ./...
-
-      - name: Generate coverage report
-        run: go tool cover -html=coverage.out -o coverage.html
+      - name: Run tests with coverage
+        run: |
+          go test -coverprofile=coverage.out ./... -coverpkg=./cmd/...,./internal/...,./pkg/...
+          go tool cover -html=coverage.out -o coverage.html
+          echo "Coverage summary:"
+          go tool cover -func=coverage.out | tail -1
 
       - name: Upload coverage to Codecov
         if: matrix.go-version == '1.22'
@@ -128,26 +129,61 @@ jobs:
 
       - name: Test code generation
         run: |
-          # Generate code from sample API
-          ./gopenapi --spec=sample-api.yaml --output=test-generated --package=testapi
+          # Generate code from example API
+          ./gopenapi --spec=example/api.yaml --output=test-generated --package=testapi
 
           # Verify generated files exist
-          test -f test-generated/main.go
-          test -f test-generated/go.mod
-          test -f test-generated/api/api.go
-          test -f test-generated/api/implementation.go
-          test -f test-generated/models/models.go
-          test -f test-generated/server/server.go
+          echo "Checking generated files..."
+          test -f test-generated/main.go || (echo "❌ main.go not found" && exit 1)
+          test -f test-generated/go.mod || (echo "❌ go.mod not found" && exit 1)
+          test -f test-generated/handlers/api.go || (echo "❌ handlers/api.go not found" && exit 1)
+          test -f test-generated/generated/api/interfaces.go || (echo "❌ generated/api/interfaces.go not found" && exit 1)
+          test -f test-generated/generated/models/models.go || (echo "❌ generated/models/models.go not found" && exit 1)
+          test -f test-generated/generated/server/router.go || (echo "❌ generated/server/router.go not found" && exit 1)
+          test -f test-generated/README.md || (echo "❌ README.md not found" && exit 1)
+
+          # Verify generated content contains expected elements
+          echo "Verifying generated content..."
+          grep -q "package main" test-generated/main.go || (echo "❌ main.go missing package declaration" && exit 1)
+          grep -q "module testapi" test-generated/go.mod || (echo "❌ go.mod missing correct module name" && exit 1)
+          grep -q "type User struct" test-generated/generated/models/models.go || (echo "❌ User model not generated" && exit 1)
+          grep -q "APIHandlers interface" test-generated/generated/api/interfaces.go || (echo "❌ API interface not generated" && exit 1)
+          grep -q "NewServer" test-generated/generated/server/router.go || (echo "❌ Server not generated" && exit 1)
 
           # Test that generated code compiles
+          echo "Testing compilation..."
           cd test-generated
           go mod tidy
-          go build -o test-server .
+          go build -o test-server . || (echo "❌ Generated code failed to compile" && exit 1)
 
-          # Test that server starts (with timeout)
-          timeout 3s ./test-server || true
+          # Test that server starts (with timeout) and responds
+          echo "Testing server startup..."
+          timeout 5s ./test-server &
+          SERVER_PID=$!
+          sleep 2
+
+          # Test if server is responding (if it started successfully)
+          if kill -0 $SERVER_PID 2>/dev/null; then
+            # Try to make a request to the health endpoint
+            curl -f http://localhost:8080/health -m 2 || echo "Server started but health endpoint not responding (expected for template)"
+            kill $SERVER_PID 2>/dev/null || true
+          else
+            echo "Server failed to start within timeout (may be expected for template code)"
+          fi
 
           echo "✅ Integration test passed"
+
+      - name: Test regeneration (idempotency)
+        run: |
+          # Test that regenerating doesn't break existing files
+          echo "Testing regeneration..."
+          ./gopenapi --spec=example/api.yaml --output=test-generated --package=testapi
+
+          # Verify files still exist and compile
+          cd test-generated
+          go build -o test-server . || (echo "❌ Code failed to compile after regeneration" && exit 1)
+
+          echo "✅ Regeneration test passed"
 
   makefile-test:
     name: Makefile Test

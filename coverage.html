@@ -1,0 +1,2050 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>gopenapi: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/shubhamku044/gopenapi/cmd/gopenapi/main.go (0.0%)</option>
+				
+				<option value="file1">github.com/shubhamku044/gopenapi/internal/generator/api.go (75.0%)</option>
+				
+				<option value="file2">github.com/shubhamku044/gopenapi/internal/generator/generator.go (87.6%)</option>
+				
+				<option value="file3">github.com/shubhamku044/gopenapi/internal/generator/main.go (52.6%)</option>
+				
+				<option value="file4">github.com/shubhamku044/gopenapi/internal/generator/models.go (87.1%)</option>
+				
+				<option value="file5">github.com/shubhamku044/gopenapi/internal/generator/readme.go (90.0%)</option>
+				
+				<option value="file6">github.com/shubhamku044/gopenapi/internal/generator/server.go (80.0%)</option>
+				
+				<option value="file7">github.com/shubhamku044/gopenapi/internal/parser/parser.go (97.1%)</option>
+				
+				<option value="file8">github.com/shubhamku044/gopenapi/pkg/utils/typeconverter.go (100.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "flag"
+        "fmt"
+        "log"
+        "os"
+        "path/filepath"
+        "strings"
+
+        "github.com/shubhamku044/gopenapi/internal/generator"
+        "github.com/shubhamku044/gopenapi/internal/parser"
+)
+
+func main() <span class="cov0" title="0">{
+        specFile := flag.String("spec", "", "Path to OpenAPI specification file (YAML or JSON)")
+        outputDir := flag.String("output", ".", "Output directory for generated code (defaults to current directory)")
+        packageName := flag.String("package", "", "Package name for generated code (auto-detected from go.mod if not provided)")
+        flag.Parse()
+
+        if *specFile == "" </span><span class="cov0" title="0">{
+                log.Fatal("Please provide an OpenAPI specification file with --spec")
+        }</span>
+
+        // Check if spec file exists
+        <span class="cov0" title="0">if _, err := os.Stat(*specFile); os.IsNotExist(err) </span><span class="cov0" title="0">{
+                log.Fatalf("OpenAPI specification file '%s' not found", *specFile)
+        }</span>
+
+        <span class="cov0" title="0">spec, err := parser.ParseSpecFile(*specFile)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Failed to parse OpenAPI specification: %v", err)
+        }</span>
+
+        // Always try to read module name from go.mod first
+        <span class="cov0" title="0">moduleName := ""
+        goModPath := filepath.Join(*outputDir, "go.mod")
+        if content, err := os.ReadFile(goModPath); err == nil </span><span class="cov0" title="0">{
+                contentStr := string(content)
+                lines := strings.Split(contentStr, "\n")
+                for _, line := range lines </span><span class="cov0" title="0">{
+                        line = strings.TrimSpace(line)
+                        if strings.HasPrefix(line, "module ") </span><span class="cov0" title="0">{
+                                moduleName = strings.TrimSpace(line[7:])
+                                break</span>
+                        }
+                }
+        }
+
+        // Determine package name
+        <span class="cov0" title="0">pkg := *packageName
+        if pkg == "" </span><span class="cov0" title="0">{
+                if moduleName != "" </span><span class="cov0" title="0">{
+                        // Extract package name from module (last part after /)
+                        pkg = filepath.Base(moduleName)
+                }</span> else<span class="cov0" title="0"> {
+                        // Fallback to directory name if no go.mod found
+                        absPath, err := filepath.Abs(*outputDir)
+                        if err == nil </span><span class="cov0" title="0">{
+                                pkg = filepath.Base(absPath)
+                        }</span>
+                        <span class="cov0" title="0">if pkg == "" || pkg == "." </span><span class="cov0" title="0">{
+                                pkg = "api"
+                        }</span>
+                }
+        }
+
+        // Use package name as module name fallback if no go.mod found
+        <span class="cov0" title="0">if moduleName == "" </span><span class="cov0" title="0">{
+                moduleName = pkg
+        }</span>
+
+        <span class="cov0" title="0">config := generator.Config{
+                OutputDir:   *outputDir,
+                PackageName: pkg,
+                ModuleName:  moduleName,
+        }
+
+        err = generator.GenerateCode(spec, config)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Failed to generate code: %v", err)
+        }</span>
+
+        <span class="cov0" title="0">fmt.Printf("✅ Code successfully generated in %s\n", *outputDir)
+        fmt.Printf("📦 Module: %s\n", moduleName)
+        fmt.Printf("📁 Package: %s\n", pkg)
+
+        // Check if dependencies need to be installed
+        goModExists := false
+        if _, err := os.Stat(filepath.Join(*outputDir, "go.mod")); err == nil </span><span class="cov0" title="0">{
+                goModExists = true
+        }</span>
+
+        <span class="cov0" title="0">fmt.Println("\n🚀 Next steps:")
+        if goModExists </span><span class="cov0" title="0">{
+                fmt.Println("   go mod tidy                    # Install/update dependencies")
+        }</span> else<span class="cov0" title="0"> {
+                fmt.Println("   go mod init &lt;your-module-name&gt; # Initialize Go module first")
+                fmt.Println("   go mod tidy                    # Install dependencies")
+        }</span>
+        <span class="cov0" title="0">fmt.Println("   go run main.go                 # Start your API server")</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package generator
+
+import (
+        "os"
+        "path/filepath"
+        "strings"
+        "text/template"
+
+        "github.com/shubhamku044/gopenapi/internal/models"
+        "github.com/shubhamku044/gopenapi/pkg/utils"
+)
+
+const (
+        pathParameterType = "path"
+)
+
+// APIMethod represents an API method for generation
+type APIMethod struct {
+        Name        string
+        HandlerName string
+        Comment     string
+        Parameters  string
+}
+
+// GenerateAPIFile generates the API interface file
+func GenerateAPIFile(spec *models.OpenAPISpec, baseDir string) error <span class="cov8" title="1">{
+        apiTemplate := `package api
+
+import (
+        "github.com/gin-gonic/gin"
+)
+
+// API defines the interface for API operations
+type API interface {
+{{range .Methods}}
+        {{.Comment}}
+        {{.HandlerName}}(c *gin.Context{{.Parameters}})
+{{end}}
+}
+`
+
+        tmpl, err := template.New("api").Parse(apiTemplate)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Generate methods from OpenAPI spec
+        <span class="cov8" title="1">var methods []APIMethod
+        for path, operations := range spec.Paths </span><span class="cov8" title="1">{
+                for method, op := range operations </span><span class="cov8" title="1">{
+                        handlerName := utils.ToCamelCase(op.OperationID)
+
+                        // Build comment
+                        comment := "// " + handlerName + " handles " + strings.ToUpper(method) + " " + path
+                        if op.Summary != "" </span><span class="cov8" title="1">{
+                                comment += "\n\t// " + op.Summary
+                        }</span>
+                        <span class="cov8" title="1">if op.Description != "" </span><span class="cov0" title="0">{
+                                comment += "\n\t// " + op.Description
+                        }</span>
+
+                        // Build parameters
+                        <span class="cov8" title="1">var params []string
+                        for _, param := range op.Parameters </span><span class="cov0" title="0">{
+                                if param.In == pathParameterType </span><span class="cov0" title="0">{
+                                        paramType := utils.GetGoType(param.Schema)
+                                        params = append(params, param.Name+" "+paramType)
+                                }</span>
+                        }
+
+                        <span class="cov8" title="1">paramStr := ""
+                        if len(params) &gt; 0 </span><span class="cov0" title="0">{
+                                paramStr = ", " + strings.Join(params, ", ")
+                        }</span>
+
+                        <span class="cov8" title="1">methods = append(methods, APIMethod{
+                                Name:        strings.ToUpper(method) + " " + path,
+                                HandlerName: handlerName,
+                                Comment:     comment,
+                                Parameters:  paramStr,
+                        })</span>
+                }
+        }
+
+        <span class="cov8" title="1">data := struct {
+                Methods []APIMethod
+        }{
+                Methods: methods,
+        }
+
+        f, err := os.Create(filepath.Join(baseDir, "api", "api.go"))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer f.Close()
+
+        return tmpl.Execute(f, data)</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package generator
+
+import (
+        "fmt"
+        "os"
+        "path/filepath"
+        "strings"
+        "text/template"
+
+        "github.com/shubhamku044/gopenapi/internal/models"
+        "github.com/shubhamku044/gopenapi/pkg/utils"
+)
+
+// Config represents generator configuration
+type Config struct {
+        OutputDir   string
+        PackageName string
+        ModuleName  string
+}
+
+// GenerateCode generates all code from an OpenAPI spec with complete separation
+func GenerateCode(spec *models.OpenAPISpec, config Config) error <span class="cov8" title="1">{
+        if config.ModuleName == "" </span><span class="cov0" title="0">{
+                config.ModuleName = config.PackageName
+        }</span>
+
+        // Create directory structure with separation
+        <span class="cov8" title="1">err := createProjectStructure(config.OutputDir)
+        if err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+
+        // Generate go.mod ONLY if it doesn't exist (user's project)
+        <span class="cov8" title="1">err = GenerateGoModIfNotExists(config.OutputDir, config.ModuleName)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Generate user's main.go ONLY if it doesn't exist
+        <span class="cov8" title="1">err = GenerateUserMainIfNotExists(spec, config.OutputDir, config.ModuleName)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Always regenerate the generated/ directory (safe to overwrite)
+        <span class="cov8" title="1">err = GenerateInterfaces(spec, config.OutputDir, config.ModuleName)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">err = GenerateModels(spec, filepath.Join(config.OutputDir, "generated"))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">err = GenerateRouter(spec, config.OutputDir, config.ModuleName)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Generate handler templates ONLY if they don't exist
+        <span class="cov8" title="1">err = GenerateHandlerTemplates(spec, config.OutputDir, config.ModuleName)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Always regenerate documentation
+        <span class="cov8" title="1">err = GenerateReadme(spec, config.OutputDir, config.PackageName)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// createProjectStructure creates the separated directory structure
+func createProjectStructure(baseDir string) error <span class="cov8" title="1">{
+        dirs := []string{
+                baseDir,
+                filepath.Join(baseDir, "handlers"), // User implementations
+                filepath.Join(baseDir, "generated", "api"),    // Generated interfaces
+                filepath.Join(baseDir, "generated", "models"), // Generated models
+                filepath.Join(baseDir, "generated", "server"), // Generated server
+        }
+
+        for _, dir := range dirs </span><span class="cov8" title="1">{
+                err := os.MkdirAll(dir, 0755)
+                if err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// GenerateGoModIfNotExists generates go.mod only if it doesn't exist
+func GenerateGoModIfNotExists(outputDir, moduleName string) error <span class="cov8" title="1">{
+        goModPath := filepath.Join(outputDir, "go.mod")
+
+        // Check if go.mod already exists
+        if _, err := os.Stat(goModPath); err == nil </span><span class="cov8" title="1">{
+                // go.mod already exists, skip generation
+                return nil
+        }</span>
+
+        <span class="cov8" title="1">goModContent := fmt.Sprintf(`module %s
+
+go 1.21
+
+require (
+        github.com/gin-gonic/gin v1.10.0
+)
+`, moduleName)
+
+        return os.WriteFile(goModPath, []byte(goModContent), 0600)</span>
+}
+
+// GenerateUserMainIfNotExists generates main.go only if it doesn't exist
+func GenerateUserMainIfNotExists(spec *models.OpenAPISpec, baseDir string, moduleName string) error <span class="cov8" title="1">{
+        mainPath := filepath.Join(baseDir, "main.go")
+        if _, err := os.Stat(mainPath); !os.IsNotExist(err) </span><span class="cov8" title="1">{
+                return nil // Already exists, don't overwrite
+        }</span>
+
+        <span class="cov8" title="1">mainTemplate := `package main
+
+import (
+        "context"
+        "log"
+        "net/http"
+        "os"
+        "os/signal"
+        "syscall"
+        "time"
+
+        "{{.ModuleName}}/generated/server"
+        "{{.ModuleName}}/handlers"
+)
+
+func main() {
+        // Create handler implementation
+        apiHandlers := handlers.NewAPIHandlers()
+        
+        // Create server with handlers
+        srv := server.NewServer(apiHandlers)
+        
+        // Start server in a goroutine
+        go func() {
+                port := os.Getenv("PORT")
+                if port == "" {
+                        port = "8080"
+                }
+                
+                log.Printf("Server starting on port %s", port)
+                if err := srv.Start(":" + port); err != nil &amp;&amp; err != http.ErrServerClosed {
+                        log.Fatalf("Server failed to start: %v", err)
+                }
+        }()
+
+        // Wait for interrupt signal for graceful shutdown
+        quit := make(chan os.Signal, 1)
+        signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+        &lt;-quit
+        log.Println("Shutting down server...")
+
+        // Graceful shutdown with timeout
+        ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+        defer cancel()
+        
+        if err := srv.Shutdown(ctx); err != nil {
+                log.Fatal("Server forced to shutdown:", err)
+        }
+
+        log.Println("Server exited")
+}
+`
+
+        tmpl, err := template.New("main").Parse(mainTemplate)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">data := struct {
+                ModuleName string
+        }{
+                ModuleName: moduleName,
+        }
+
+        f, err := os.Create(mainPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer f.Close()
+
+        return tmpl.Execute(f, data)</span>
+}
+
+// GenerateInterfaces generates the API interfaces in generated/api/
+func GenerateInterfaces(spec *models.OpenAPISpec, baseDir string, moduleName string) error <span class="cov8" title="1">{
+        interfaceTemplate := `// Code generated by gopenapi. DO NOT EDIT.
+
+package api
+
+import "github.com/gin-gonic/gin"
+
+// APIHandlers defines the interface that users must implement
+type APIHandlers interface {
+{{range .Methods}}
+        // {{.HandlerName}} {{.Comment}}
+        {{.HandlerName}}(c *gin.Context{{.Parameters}})
+{{end}}
+}
+
+// APIMethod represents an API endpoint
+type APIMethod struct {
+        Method      string
+        Path        string
+        HandlerName string
+}
+
+// GetAPIMethods returns all API methods for documentation/routing
+func GetAPIMethods() []APIMethod {
+        return []APIMethod{
+{{range .Methods}}
+                {
+                        Method:      "{{.Method}}",
+                        Path:        "{{.Path}}",
+                        HandlerName: "{{.HandlerName}}",
+                },
+{{end}}
+        }
+}
+`
+
+        tmpl, err := template.New("interface").Parse(interfaceTemplate)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Generate methods from OpenAPI spec
+        <span class="cov8" title="1">var methods []struct {
+                Method      string
+                Path        string
+                HandlerName string
+                Comment     string
+                Parameters  string
+        }
+
+        for path, operations := range spec.Paths </span><span class="cov8" title="1">{
+                for method, op := range operations </span><span class="cov8" title="1">{
+                        handlerName := utils.ToCamelCase(op.OperationID)
+
+                        // Build comment
+                        comment := "handles " + strings.ToUpper(method) + " " + path
+                        if op.Summary != "" </span><span class="cov8" title="1">{
+                                comment = op.Summary
+                        }</span>
+
+                        // Build parameters
+                        <span class="cov8" title="1">var params []string
+                        for _, param := range op.Parameters </span><span class="cov8" title="1">{
+                                if param.In == pathParameterType </span><span class="cov8" title="1">{
+                                        paramType := utils.GetGoType(param.Schema)
+                                        params = append(params, param.Name+" "+paramType)
+                                }</span>
+                        }
+
+                        <span class="cov8" title="1">paramStr := ""
+                        if len(params) &gt; 0 </span><span class="cov8" title="1">{
+                                paramStr = ", " + strings.Join(params, ", ")
+                        }</span>
+
+                        <span class="cov8" title="1">methods = append(methods, struct {
+                                Method      string
+                                Path        string
+                                HandlerName string
+                                Comment     string
+                                Parameters  string
+                        }{
+                                Method:      strings.ToUpper(method),
+                                Path:        path,
+                                HandlerName: handlerName,
+                                Comment:     comment,
+                                Parameters:  paramStr,
+                        })</span>
+                }
+        }
+
+        <span class="cov8" title="1">data := struct {
+                Methods []struct {
+                        Method      string
+                        Path        string
+                        HandlerName string
+                        Comment     string
+                        Parameters  string
+                }
+        }{
+                Methods: methods,
+        }
+
+        f, err := os.Create(filepath.Join(baseDir, "generated", "api", "interfaces.go"))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer f.Close()
+
+        return tmpl.Execute(f, data)</span>
+}
+
+// GenerateRouter generates the HTTP router in generated/server/
+func GenerateRouter(spec *models.OpenAPISpec, baseDir string, moduleName string) error <span class="cov8" title="1">{
+        routerTemplate := `// Code generated by gopenapi. DO NOT EDIT.
+
+package server
+
+import (
+        "context"
+        "net/http"
+        "time"
+
+        "github.com/gin-gonic/gin"
+        "{{.ModuleName}}/generated/api"
+)
+
+// Server wraps the HTTP server
+type Server struct {
+        router   *gin.Engine
+        server   *http.Server
+        handlers api.APIHandlers
+}
+
+// NewServer creates a new HTTP server with the provided handlers
+func NewServer(handlers api.APIHandlers) *Server {
+        router := gin.Default()
+        
+        s := &amp;Server{
+                router:   router,
+                handlers: handlers,
+        }
+        
+        s.setupRoutes()
+        s.setupServer()
+        
+        return s
+}
+
+// Start starts the HTTP server
+func (s *Server) Start(addr string) error {
+        s.server.Addr = addr
+        return s.server.ListenAndServe()
+}
+
+// Shutdown gracefully shuts down the server
+func (s *Server) Shutdown(ctx context.Context) error {
+        return s.server.Shutdown(ctx)
+}
+
+// GetRouter returns the underlying Gin router for advanced configuration
+func (s *Server) GetRouter() *gin.Engine {
+        return s.router
+}
+
+// setupServer configures the HTTP server
+func (s *Server) setupServer() {
+        s.server = &amp;http.Server{
+                Handler:      s.router,
+                ReadTimeout:  30 * time.Second,
+                WriteTimeout: 30 * time.Second,
+                IdleTimeout:  120 * time.Second,
+        }
+}
+
+// setupRoutes configures all API routes
+func (s *Server) setupRoutes() {
+{{range .Routes}}
+        // {{.Comment}}
+        s.router.{{.Method}}("{{.GinPath}}", func(c *gin.Context) {
+                {{if .HasPathParams}}{{range .PathParams}}{{.Name}} := c.Param("{{.Name}}")
+                {{end}}s.handlers.{{.HandlerName}}(c{{range .PathParams}}, {{.Name}}{{end}}){{else}}s.handlers.{{.HandlerName}}(c){{end}}
+        })
+{{end}}
+}
+`
+
+        tmpl, err := template.New("router").Parse(routerTemplate)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">var routes []struct {
+                Method        string
+                Path          string
+                GinPath       string
+                HandlerName   string
+                Comment       string
+                HasPathParams bool
+                PathParams    []struct {
+                        Name string
+                        Type string
+                }
+        }
+
+        for path, operations := range spec.Paths </span><span class="cov8" title="1">{
+                for method, op := range operations </span><span class="cov8" title="1">{
+                        ginPath := utils.ConvertPathToGin(path)
+                        handlerName := utils.ToCamelCase(op.OperationID)
+
+                        comment := strings.ToUpper(method) + " " + path
+                        if op.Summary != "" </span><span class="cov8" title="1">{
+                                comment += " - " + op.Summary
+                        }</span>
+
+                        <span class="cov8" title="1">var pathParams []struct {
+                                Name string
+                                Type string
+                        }
+                        for _, param := range op.Parameters </span><span class="cov8" title="1">{
+                                if param.In == pathParameterType </span><span class="cov8" title="1">{
+                                        pathParams = append(pathParams, struct {
+                                                Name string
+                                                Type string
+                                        }{
+                                                Name: param.Name,
+                                                Type: utils.GetGoType(param.Schema),
+                                        })
+                                }</span>
+                        }
+
+                        <span class="cov8" title="1">routes = append(routes, struct {
+                                Method        string
+                                Path          string
+                                GinPath       string
+                                HandlerName   string
+                                Comment       string
+                                HasPathParams bool
+                                PathParams    []struct {
+                                        Name string
+                                        Type string
+                                }
+                        }{
+                                Method:        strings.ToUpper(method),
+                                Path:          path,
+                                GinPath:       ginPath,
+                                HandlerName:   handlerName,
+                                Comment:       comment,
+                                HasPathParams: len(pathParams) &gt; 0,
+                                PathParams:    pathParams,
+                        })</span>
+                }
+        }
+
+        <span class="cov8" title="1">data := struct {
+                ModuleName string
+                Routes     []struct {
+                        Method        string
+                        Path          string
+                        GinPath       string
+                        HandlerName   string
+                        Comment       string
+                        HasPathParams bool
+                        PathParams    []struct {
+                                Name string
+                                Type string
+                        }
+                }
+        }{
+                ModuleName: moduleName,
+                Routes:     routes,
+        }
+
+        f, err := os.Create(filepath.Join(baseDir, "generated", "server", "router.go"))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer f.Close()
+
+        return tmpl.Execute(f, data)</span>
+}
+
+// GenerateHandlerTemplates generates handler templates ONLY if they don't exist
+func GenerateHandlerTemplates(spec *models.OpenAPISpec, baseDir string, moduleName string) error <span class="cov8" title="1">{
+        handlerTemplate := `package handlers
+
+import (
+        "net/http"
+
+        "github.com/gin-gonic/gin"
+        "{{.ModuleName}}/generated/api"{{if .HasModels}}
+        "{{.ModuleName}}/generated/models"{{end}}
+)
+
+// APIHandlers implements the api.APIHandlers interface
+type APIHandlers struct {
+        // Add your dependencies here:
+        // db     *sql.DB
+        // logger *slog.Logger
+        // cache  redis.Client
+}
+
+// NewAPIHandlers creates a new APIHandlers instance
+func NewAPIHandlers() api.APIHandlers {
+        return &amp;APIHandlers{
+                // Initialize your dependencies here
+        }
+}
+
+{{range .Methods}}
+// {{.HandlerName}} {{.Comment}}
+func (h *APIHandlers) {{.HandlerName}}(c *gin.Context{{.Parameters}}) {
+        // TODO: Implement your business logic here
+        
+        {{.ExampleCode}}
+}
+
+{{end}}`
+
+        // Check if handlers directory has any .go files
+        handlersDir := filepath.Join(baseDir, "handlers")
+        entries, err := os.ReadDir(handlersDir)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // If any .go files exist, don't generate
+        <span class="cov8" title="1">for _, entry := range entries </span><span class="cov8" title="1">{
+                if strings.HasSuffix(entry.Name(), ".go") </span><span class="cov8" title="1">{
+                        return nil // User already has handlers, don't overwrite
+                }</span>
+        }
+
+        <span class="cov8" title="1">tmpl, err := template.New("handlers").Parse(handlerTemplate)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Generate methods
+        <span class="cov8" title="1">var methods []struct {
+                HandlerName string
+                Comment     string
+                Parameters  string
+                ExampleCode string
+        }
+
+        for path, operations := range spec.Paths </span><span class="cov8" title="1">{
+                for method, op := range operations </span><span class="cov8" title="1">{
+                        handlerName := utils.ToCamelCase(op.OperationID)
+
+                        comment := "handles " + strings.ToUpper(method) + " " + path
+                        if op.Summary != "" </span><span class="cov8" title="1">{
+                                comment = op.Summary
+                        }</span>
+
+                        // Build parameters
+                        <span class="cov8" title="1">var params []string
+                        for _, param := range op.Parameters </span><span class="cov8" title="1">{
+                                if param.In == pathParameterType </span><span class="cov8" title="1">{
+                                        paramType := utils.GetGoType(param.Schema)
+                                        params = append(params, param.Name+" "+paramType)
+                                }</span>
+                        }
+
+                        <span class="cov8" title="1">paramStr := ""
+                        if len(params) &gt; 0 </span><span class="cov8" title="1">{
+                                paramStr = ", " + strings.Join(params, ", ")
+                        }</span>
+
+                        // Generate example code based on method
+                        <span class="cov8" title="1">var exampleCode string
+                        hasModels := len(spec.Components.Schemas) &gt; 0
+
+                        switch strings.ToUpper(method) </span>{
+                        case "GET":<span class="cov8" title="1">
+                                if hasModels &amp;&amp; (strings.Contains(path, "user") || strings.Contains(handlerName, "User")) </span><span class="cov8" title="1">{
+                                        exampleCode = `// TODO: Implement your business logic here
+        // Example with sample data
+        users := []models.User{
+                {
+                        Id:    "1",
+                        Name:  "John Doe", 
+                        Email: "john@example.com",
+                },
+        }
+        
+        c.JSON(http.StatusOK, users)`
+                                }</span> else<span class="cov8" title="1"> {
+                                        exampleCode = `// TODO: Implement your business logic here
+        
+        c.JSON(http.StatusOK, gin.H{
+                "message": "Success",
+                "data":    nil, // Replace with your data
+        })`
+                                }</span>
+                        case "POST":<span class="cov8" title="1">
+                                if hasModels &amp;&amp; (strings.Contains(path, "user") || strings.Contains(handlerName, "User")) </span><span class="cov8" title="1">{
+                                        exampleCode = `// TODO: Implement your business logic here
+        
+        // Parse request body
+        var user models.User
+        if err := c.ShouldBindJSON(&amp;user); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+        }
+        
+        // Generate ID for new user (in real app, use UUID or database ID)
+        user.Id = "generated-id-123"
+        
+        c.JSON(http.StatusCreated, user)`
+                                }</span> else<span class="cov8" title="1"> {
+                                        exampleCode = `// TODO: Implement your business logic here
+        
+        // Example: Parse request body
+        // var request models.SomeModel
+        // if err := c.ShouldBindJSON(&amp;request); err != nil {
+        //     c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        //     return
+        // }
+        
+        c.JSON(http.StatusCreated, gin.H{
+                "message": "Created successfully",
+        })`
+                                }</span>
+                        case "PUT":<span class="cov8" title="1">
+                                exampleCode = `// TODO: Implement your business logic here
+        
+        c.JSON(http.StatusOK, gin.H{
+                "message": "Updated successfully",
+        })`</span>
+                        case "DELETE":<span class="cov8" title="1">
+                                exampleCode = `// TODO: Implement your business logic here
+        
+        c.JSON(http.StatusNoContent, nil)`</span>
+                        default:<span class="cov0" title="0">
+                                exampleCode = `// TODO: Implement your business logic here
+        
+        c.JSON(http.StatusNotImplemented, gin.H{
+                "error": "Not implemented yet",
+        })`</span>
+                        }
+
+                        <span class="cov8" title="1">methods = append(methods, struct {
+                                HandlerName string
+                                Comment     string
+                                Parameters  string
+                                ExampleCode string
+                        }{
+                                HandlerName: handlerName,
+                                Comment:     comment,
+                                Parameters:  paramStr,
+                                ExampleCode: exampleCode,
+                        })</span>
+                }
+        }
+
+        <span class="cov8" title="1">data := struct {
+                ModuleName string
+                HasModels  bool
+                Methods    []struct {
+                        HandlerName string
+                        Comment     string
+                        Parameters  string
+                        ExampleCode string
+                }
+        }{
+                ModuleName: moduleName,
+                HasModels:  len(spec.Components.Schemas) &gt; 0,
+                Methods:    methods,
+        }
+
+        f, err := os.Create(filepath.Join(baseDir, "handlers", "api.go"))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer f.Close()
+
+        return tmpl.Execute(f, data)</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package generator
+
+import (
+        "os"
+        "path/filepath"
+        "text/template"
+
+        "github.com/shubhamku044/gopenapi/internal/models"
+)
+
+// GenerateMainFile generates the main.go file that serves as the entrypoint
+func GenerateMainFile(spec *models.OpenAPISpec, baseDir string, moduleName string) error <span class="cov8" title="1">{
+        mainTemplate := `package main
+
+import (
+        "context"
+        "log"
+        "net/http"
+        "os"
+        "os/signal"
+        "syscall"
+        "time"
+
+        "{{.ModuleName}}/api"
+        "{{.ModuleName}}/server"
+)
+
+func main() {
+        // Get port from environment variable or use default
+        port := os.Getenv("PORT")
+        if port == "" {
+                port = "8080"
+        }
+
+        // Create API implementation
+        apiImpl := api.NewAPI()
+
+        // Create server with options
+        srv := server.NewServer(apiImpl,
+                server.WithMode("debug"), // Change to "release" for production
+        )
+
+        // Create HTTP server
+        httpServer := &amp;http.Server{
+                Addr:    ":" + port,
+                Handler: srv.GetRouter(),
+        }
+
+        // Setup graceful shutdown
+        serverCtx, serverStopCtx := context.WithCancel(context.Background())
+
+        // Listen for syscall signals for graceful shutdown
+        sig := make(chan os.Signal, 1)
+        signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+        go func() {
+                &lt;-sig
+
+                // Shutdown signal with grace period of 30 seconds
+                shutdownCtx, cancelShutdown := context.WithTimeout(serverCtx, 30*time.Second)
+                defer cancelShutdown()
+
+                go func() {
+                        &lt;-shutdownCtx.Done()
+                        if shutdownCtx.Err() == context.DeadlineExceeded {
+                                log.Fatal("graceful shutdown timed out.. forcing exit.")
+                        }
+                }()
+
+                // Trigger graceful shutdown
+                err := httpServer.Shutdown(shutdownCtx)
+                if err != nil {
+                        log.Fatalf("Server shutdown failed: %v", err)
+                }
+                serverStopCtx()
+        }()
+
+        // Start server
+        log.Printf("Starting server on :%s", port)
+        log.Printf("API endpoints:")
+        {{range .Endpoints}}
+        log.Printf("  {{.Method}} {{.Path}} - {{.Description}}")
+        {{end}}
+        log.Printf("Press Ctrl+C to stop the server")
+
+        err := httpServer.ListenAndServe()
+        if err != nil &amp;&amp; err != http.ErrServerClosed {
+                log.Fatalf("Server failed to start: %v", err)
+        }
+
+        // Wait for server context to be stopped
+        &lt;-serverCtx.Done()
+        log.Printf("Server stopped gracefully")
+}
+`
+
+        // Prepare endpoint data for logging
+        var endpoints []struct {
+                Method      string
+                Path        string
+                Description string
+        }
+
+        for path, operations := range spec.Paths </span><span class="cov0" title="0">{
+                for method, op := range operations </span><span class="cov0" title="0">{
+                        description := op.Summary
+                        if description == "" </span><span class="cov0" title="0">{
+                                description = op.Description
+                        }</span>
+                        <span class="cov0" title="0">if description == "" </span><span class="cov0" title="0">{
+                                description = "No description available"
+                        }</span>
+
+                        <span class="cov0" title="0">endpoints = append(endpoints, struct {
+                                Method      string
+                                Path        string
+                                Description string
+                        }{
+                                Method:      method,
+                                Path:        path,
+                                Description: description,
+                        })</span>
+                }
+        }
+
+        <span class="cov8" title="1">tmpl, err := template.New("main").Parse(mainTemplate)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">data := struct {
+                ModuleName string
+                Endpoints  []struct {
+                        Method      string
+                        Path        string
+                        Description string
+                }
+        }{
+                ModuleName: moduleName,
+                Endpoints:  endpoints,
+        }
+
+        f, err := os.Create(filepath.Join(baseDir, "main.go"))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer f.Close()
+
+        return tmpl.Execute(f, data)</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package generator
+
+import (
+        "os"
+        "path/filepath"
+        "text/template"
+
+        "github.com/shubhamku044/gopenapi/internal/models"
+        "github.com/shubhamku044/gopenapi/pkg/utils"
+)
+
+func GenerateModels(spec *models.OpenAPISpec, baseDir string) error <span class="cov8" title="1">{
+        // Create models directory if it doesn't exist
+        modelsDir := filepath.Join(baseDir, "models")
+        if err := os.MkdirAll(modelsDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">needsTimeImport := false
+        for _, schema := range spec.Components.Schemas </span><span class="cov8" title="1">{
+                if hasTimeFields(schema) </span><span class="cov8" title="1">{
+                        needsTimeImport = true
+                        break</span>
+                }
+        }
+
+        <span class="cov8" title="1">imports := ""
+        if needsTimeImport </span><span class="cov8" title="1">{
+                imports = `import (
+        "time"
+)`
+        }</span>
+
+        <span class="cov8" title="1">modelsTemplate := `package models
+
+` + imports + `
+
+// This file contains the data models for the API
+// In a real implementation, these would be fully generated from the schema definitions
+
+// ResponseMessage is a simple response model
+type ResponseMessage struct {
+        Message string ` + "`json:\"message\"`" + `
+}
+
+// ErrorResponse represents an API error response
+type ErrorResponse struct {
+        Code    int    ` + "`json:\"code\"`" + `
+        Message string ` + "`json:\"message\"`" + `
+}
+
+{{range $name, $schema := .Schemas}}
+// {{$name}} represents a {{$name}} model
+type {{$name}} struct {
+        {{range $propName, $propSchema := $schema.Properties}}
+        {{toCamelCase $propName}} {{getGoType $propSchema}} ` + "`json:\"{{$propName}}\"`" + `
+        {{end}}
+}
+{{end}}
+`
+
+        funcMap := template.FuncMap{
+                "toCamelCase": utils.ToCamelCase,
+                "getGoType":   func(s models.Schema) string </span><span class="cov8" title="1">{ return utils.GetGoType(s) }</span>,
+        }
+
+        <span class="cov8" title="1">tmpl, err := template.New("models").Funcs(funcMap).Parse(modelsTemplate)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">data := struct {
+                Schemas map[string]models.Schema
+        }{
+                Schemas: spec.Components.Schemas,
+        }
+
+        f, err := os.Create(filepath.Join(baseDir, "models", "models.go"))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer f.Close()
+
+        return tmpl.Execute(f, data)</span>
+}
+
+func hasTimeFields(schema models.Schema) bool <span class="cov8" title="1">{
+        if schema.Type == "string" &amp;&amp; (schema.Format == "date" || schema.Format == "date-time") </span><span class="cov8" title="1">{
+                return true
+        }</span>
+
+        <span class="cov8" title="1">for _, propSchema := range schema.Properties </span><span class="cov8" title="1">{
+                if hasTimeFields(propSchema) </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+
+        <span class="cov8" title="1">if schema.Items != nil &amp;&amp; hasTimeFields(*schema.Items) </span><span class="cov0" title="0">{
+                return true
+        }</span>
+
+        <span class="cov8" title="1">return false</span>
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package generator
+
+import (
+        "os"
+        "path/filepath"
+        "strings"
+        "text/template"
+
+        "github.com/shubhamku044/gopenapi/internal/models"
+        "github.com/shubhamku044/gopenapi/pkg/utils"
+)
+
+// GenerateReadme generates a comprehensive README for the project
+func GenerateReadme(spec *models.OpenAPISpec, baseDir string, packageName string) error <span class="cov8" title="1">{
+        readmeTemplate := `# {{.Title}}
+
+{{.Description}}
+
+**Generated by [gopenapi](https://github.com/shubhamku044/gopenapi)**
+
+## 🏗️ Project Structure
+
+This project uses a **clean separation** between generated and user code:
+
+` + "```" + `
+{{.PackageName}}/
+├── main.go              # Your application entry point (never overwritten)
+├── go.mod              # Your go.mod file (never overwritten)
+├── handlers/           # 👈 YOUR CODE GOES HERE
+│   └── api.go         # Implement your business logic here
+├── generated/          # 🤖 Generated code (safe to regenerate)
+│   ├── api/
+│   │   └── interfaces.go  # API interface definitions
+│   ├── models/
+│   │   └── models.go      # Data models from OpenAPI spec
+│   └── server/
+│       └── router.go      # HTTP server and routing
+└── README.md           # This file
+` + "```" + `
+
+## 🚀 Getting Started
+
+### 1. Implement Your Business Logic
+
+Edit ` + "`handlers/api.go`" + ` to implement your API endpoints:
+
+` + "```go" + `
+package handlers
+
+import (
+    "net/http"
+    "github.com/gin-gonic/gin"
+    "{{.PackageName}}/generated/api"
+    "{{.PackageName}}/generated/models"
+)
+
+type APIHandlers struct {
+    // Add your dependencies here:
+    // db     *sql.DB
+    // logger *slog.Logger
+    // cache  redis.Client
+}
+
+func NewAPIHandlers() api.APIHandlers {
+    return &amp;APIHandlers{
+        // Initialize your dependencies here
+    }
+}
+
+{{range .Endpoints}}
+// {{.HandlerName}} {{.Comment}}
+func (h *APIHandlers) {{.HandlerName}}(c *gin.Context{{.Parameters}}) {
+    // TODO: Implement your business logic here
+    {{.ExampleImplementation}}
+}
+
+{{end}}
+` + "```" + `
+
+### 2. Run Your Server
+
+` + "```bash" + `
+go mod tidy
+go run main.go
+` + "```" + `
+
+The server will start on port 8080 (or the port specified in the ` + "`PORT`" + ` environment variable).
+
+### 3. Test Your API
+
+{{range .Endpoints}}
+**{{.Method}} {{.Path}}** - {{.Summary}}
+` + "```bash" + `
+curl -X {{.Method}} http://localhost:8080{{.Path}}{{if eq .Method "POST"}} \
+  -H "Content-Type: application/json" \
+  -d '{}'{{end}}
+` + "```" + `
+
+{{end}}
+
+## 🔄 Updating Your API
+
+When you modify your OpenAPI specification:
+
+1. **Regenerate the code:**
+   ` + "```bash" + `
+   gopenapi --spec=your-api.yaml --output=. --package={{.PackageName}}
+   ` + "```" + `
+
+2. **Your code is preserved:**
+   - ✅ ` + "`main.go`" + ` - Your custom main function
+   - ✅ ` + "`handlers/`" + ` - Your business logic implementation
+   - ✅ ` + "`go.mod`" + ` - Your dependencies
+
+3. **Generated code is updated:**
+   - 🔄 ` + "`generated/api/interfaces.go`" + ` - Updated interface definitions
+   - 🔄 ` + "`generated/models/models.go`" + ` - Updated data models  
+   - 🔄 ` + "`generated/server/router.go`" + ` - Updated routing
+
+## 📚 API Reference
+
+{{range .Endpoints}}
+### {{.Method}} {{.Path}}
+
+**{{.Summary}}**
+
+{{if .Description}}{{.Description}}{{end}}
+
+{{if .PathParams}}**Path Parameters:**
+{{range .PathParams}}
+- ` + "`{{.Name}}`" + ` ({{.Type}}) - {{.Description}}
+{{end}}
+{{end}}
+
+{{if .RequestBody}}**Request Body:**
+` + "```json" + `
+{{.RequestBodyExample}}
+` + "```" + `
+{{end}}
+
+**Response:**
+` + "```json" + `
+{{.ResponseExample}}
+` + "```" + `
+
+---
+
+{{end}}
+
+## 🛠️ Development Tips
+
+### Adding Middleware
+
+Modify ` + "`main.go`" + ` to add middleware:
+
+` + "```go" + `
+func main() {
+    apiHandlers := handlers.NewAPIHandlers()
+    srv := server.NewServer(apiHandlers)
+    
+    // Add middleware to the router
+    router := srv.GetRouter()
+    router.Use(gin.Logger())
+    router.Use(gin.Recovery())
+    // Add your custom middleware here
+    
+    srv.Start(":8080")
+}
+` + "```" + `
+
+### Error Handling
+
+Use consistent error responses:
+
+` + "```go" + `
+func (h *APIHandlers) SomeHandler(c *gin.Context) {
+    if err := someOperation(); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "error": "Internal server error",
+            "message": err.Error(),
+        })
+        return
+    }
+    
+    c.JSON(http.StatusOK, gin.H{"message": "Success"})
+}
+` + "```" + `
+
+### Database Integration
+
+Add database dependency in ` + "`handlers/api.go`" + `:
+
+` + "```go" + `
+type APIHandlers struct {
+    db *sql.DB
+}
+
+func NewAPIHandlers(db *sql.DB) api.APIHandlers {
+    return &amp;APIHandlers{db: db}
+}
+` + "```" + `
+
+## 📖 Generated Models
+
+{{range .Models}}
+### {{.Name}}
+
+` + "```go" + `
+type {{.Name}} struct {
+{{range .Fields}}    {{.Name}} {{.Type}} ` + "`json:\"{{.JSONName}}\"`" + `{{if .Description}} // {{.Description}}{{end}}
+{{end}}}
+` + "```" + `
+
+{{end}}
+
+---
+
+**Happy coding! 🎉**
+
+&gt; This README was generated automatically. To customize it, edit the template in your gopenapi generator.
+`
+
+        tmpl, err := template.New("readme").Parse(readmeTemplate)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Prepare data for the template
+        <span class="cov8" title="1">title := "API Server"
+        if spec.Info.Title != "" </span><span class="cov8" title="1">{
+                title = spec.Info.Title
+        }</span>
+
+        <span class="cov8" title="1">description := "A REST API server generated from OpenAPI specification."
+        if spec.Info.Description != "" </span><span class="cov8" title="1">{
+                description = spec.Info.Description
+        }</span>
+
+        // Prepare endpoints
+        <span class="cov8" title="1">var endpoints []struct {
+                Method      string
+                Path        string
+                HandlerName string
+                Summary     string
+                Description string
+                Comment     string
+                Parameters  string
+                PathParams  []struct {
+                        Name        string
+                        Type        string
+                        Description string
+                }
+                RequestBody           bool
+                RequestBodyExample    string
+                ResponseExample       string
+                ExampleImplementation string
+        }
+
+        for path, operations := range spec.Paths </span><span class="cov8" title="1">{
+                for method, op := range operations </span><span class="cov8" title="1">{
+                        handlerName := utils.ToCamelCase(op.OperationID)
+
+                        comment := "handles " + strings.ToUpper(method) + " " + path
+                        if op.Summary != "" </span><span class="cov8" title="1">{
+                                comment = op.Summary
+                        }</span>
+
+                        // Build parameters
+                        <span class="cov8" title="1">var params []string
+                        var pathParams []struct {
+                                Name        string
+                                Type        string
+                                Description string
+                        }
+                        for _, param := range op.Parameters </span><span class="cov8" title="1">{
+                                if param.In == "path" </span><span class="cov8" title="1">{
+                                        paramType := utils.GetGoType(param.Schema)
+                                        params = append(params, param.Name+" "+paramType)
+                                        pathParams = append(pathParams, struct {
+                                                Name        string
+                                                Type        string
+                                                Description string
+                                        }{
+                                                Name:        param.Name,
+                                                Type:        paramType,
+                                                Description: param.Description,
+                                        })
+                                }</span>
+                        }
+
+                        <span class="cov8" title="1">paramStr := ""
+                        if len(params) &gt; 0 </span><span class="cov8" title="1">{
+                                paramStr = ", " + strings.Join(params, ", ")
+                        }</span>
+
+                        // Example implementation
+                        <span class="cov8" title="1">var exampleImpl string
+                        switch strings.ToUpper(method) </span>{
+                        case "GET":<span class="cov8" title="1">
+                                if len(pathParams) &gt; 0 </span><span class="cov8" title="1">{
+                                        exampleImpl = `// Use path parameter: ` + pathParams[0].Name + `
+    c.JSON(http.StatusOK, gin.H{
+        "id": ` + pathParams[0].Name + `,
+        "data": "your data here",
+    })`
+                                }</span> else<span class="cov8" title="1"> {
+                                        exampleImpl = `c.JSON(http.StatusOK, gin.H{
+        "data": []interface{}{}, // Return your data here
+    })`
+                                }</span>
+                        case "POST":<span class="cov8" title="1">
+                                exampleImpl = `var request models.SomeModel
+    if err := c.ShouldBindJSON(&amp;request); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+    
+    // Process the request...
+    
+    c.JSON(http.StatusCreated, request)`</span>
+                        case "PUT":<span class="cov0" title="0">
+                                exampleImpl = `var request models.SomeModel
+    if err := c.ShouldBindJSON(&amp;request); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+    
+    // Update logic here...
+    
+    c.JSON(http.StatusOK, request)`</span>
+                        case "DELETE":<span class="cov0" title="0">
+                                exampleImpl = `// Delete logic here...
+    c.JSON(http.StatusNoContent, nil)`</span>
+                        default:<span class="cov0" title="0">
+                                exampleImpl = `c.JSON(http.StatusNotImplemented, gin.H{
+        "error": "Not implemented yet",
+    })`</span>
+                        }
+
+                        <span class="cov8" title="1">endpoints = append(endpoints, struct {
+                                Method      string
+                                Path        string
+                                HandlerName string
+                                Summary     string
+                                Description string
+                                Comment     string
+                                Parameters  string
+                                PathParams  []struct {
+                                        Name        string
+                                        Type        string
+                                        Description string
+                                }
+                                RequestBody           bool
+                                RequestBodyExample    string
+                                ResponseExample       string
+                                ExampleImplementation string
+                        }{
+                                Method:                strings.ToUpper(method),
+                                Path:                  path,
+                                HandlerName:           handlerName,
+                                Summary:               op.Summary,
+                                Description:           op.Description,
+                                Comment:               comment,
+                                Parameters:            paramStr,
+                                PathParams:            pathParams,
+                                RequestBody:           op.RequestBody != nil,
+                                RequestBodyExample:    `{"key": "value"}`,
+                                ResponseExample:       `{"message": "success"}`,
+                                ExampleImplementation: exampleImpl,
+                        })</span>
+                }
+        }
+
+        // Prepare models
+        <span class="cov8" title="1">var models []struct {
+                Name   string
+                Fields []struct {
+                        Name        string
+                        Type        string
+                        JSONName    string
+                        Description string
+                }
+        }
+
+        for modelName, schema := range spec.Components.Schemas </span><span class="cov8" title="1">{
+                var fields []struct {
+                        Name        string
+                        Type        string
+                        JSONName    string
+                        Description string
+                }
+
+                for fieldName, fieldSchema := range schema.Properties </span><span class="cov8" title="1">{
+                        goType := utils.GetGoType(fieldSchema)
+                        fields = append(fields, struct {
+                                Name        string
+                                Type        string
+                                JSONName    string
+                                Description string
+                        }{
+                                Name:        utils.ToCamelCase(fieldName),
+                                Type:        goType,
+                                JSONName:    fieldName,
+                                Description: fieldSchema.Description,
+                        })
+                }</span>
+
+                <span class="cov8" title="1">models = append(models, struct {
+                        Name   string
+                        Fields []struct {
+                                Name        string
+                                Type        string
+                                JSONName    string
+                                Description string
+                        }
+                }{
+                        Name:   modelName,
+                        Fields: fields,
+                })</span>
+        }
+
+        <span class="cov8" title="1">data := struct {
+                Title       string
+                Description string
+                PackageName string
+                Endpoints   []struct {
+                        Method      string
+                        Path        string
+                        HandlerName string
+                        Summary     string
+                        Description string
+                        Comment     string
+                        Parameters  string
+                        PathParams  []struct {
+                                Name        string
+                                Type        string
+                                Description string
+                        }
+                        RequestBody           bool
+                        RequestBodyExample    string
+                        ResponseExample       string
+                        ExampleImplementation string
+                }
+                Models []struct {
+                        Name   string
+                        Fields []struct {
+                                Name        string
+                                Type        string
+                                JSONName    string
+                                Description string
+                        }
+                }
+        }{
+                Title:       title,
+                Description: description,
+                PackageName: packageName,
+                Endpoints:   endpoints,
+                Models:      models,
+        }
+
+        f, err := os.Create(filepath.Join(baseDir, "README.md"))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer f.Close()
+
+        return tmpl.Execute(f, data)</span>
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package generator
+
+import (
+        "os"
+        "path/filepath"
+        "strings"
+        "text/template"
+
+        "github.com/shubhamku044/gopenapi/internal/models"
+        "github.com/shubhamku044/gopenapi/pkg/utils"
+)
+
+type PathParam struct {
+        Name string
+        Type string
+}
+
+type Route struct {
+        Method        string
+        Path          string
+        HandlerName   string
+        PathParams    []PathParam
+        HasPathParams bool
+}
+
+func GenerateServerFile(spec *models.OpenAPISpec, baseDir string, packageName string, moduleName string) error <span class="cov8" title="1">{
+        serverTemplate := `package server
+
+import (
+        "github.com/gin-gonic/gin"
+        "{{.ModuleName}}/api"
+)
+
+// Server represents the API server
+type Server struct {
+        router *gin.Engine
+        api    api.API
+}
+
+// ServerOption represents a server option function
+type ServerOption func(*Server)
+
+// WithMiddleware adds middleware to the server
+func WithMiddleware(middleware ...gin.HandlerFunc) ServerOption {
+        return func(s *Server) {
+                s.router.Use(middleware...)
+        }
+}
+
+// WithMode sets the gin mode (debug, release, test)
+func WithMode(mode string) ServerOption {
+        return func(s *Server) {
+                gin.SetMode(mode)
+        }
+}
+
+// NewServer creates a new API server
+func NewServer(api api.API, options ...ServerOption) *Server {
+        s := &amp;Server{
+                router: gin.Default(),
+                api:    api,
+        }
+        
+        // Apply options
+        for _, option := range options {
+                option(s)
+        }
+        
+        s.setupRoutes()
+        return s
+}
+
+// Start starts the server on the specified address
+func (s *Server) Start(addr string) error {
+        return s.router.Run(addr)
+}
+
+// GetRouter returns the Gin router instance
+func (s *Server) GetRouter() *gin.Engine {
+        return s.router
+}
+
+// setupRoutes configures the API routes
+func (s *Server) setupRoutes() {
+{{range .Routes}}
+        s.router.{{.Method}}("{{.Path}}", func(c *gin.Context) {
+                {{if .HasPathParams}}
+                {{range .PathParams}}
+                {{.Name}} := c.Param("{{.Name}}")
+                {{end}}
+                {{end}}
+                s.api.{{.HandlerName}}(c{{if .HasPathParams}}, {{range $index, $param := .PathParams}}{{if $index}}, {{end}}{{.Name}}{{end}}{{end}})
+        })
+{{end}}
+}
+`
+
+        tmpl, err := template.New("server").Parse(serverTemplate)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">var routes []Route
+        for path, operations := range spec.Paths </span><span class="cov8" title="1">{
+                for method, op := range operations </span><span class="cov8" title="1">{
+                        ginPath := utils.ConvertPathToGin(path)
+                        handlerName := utils.ToCamelCase(op.OperationID)
+
+                        var pathParams []PathParam
+                        for _, param := range op.Parameters </span><span class="cov0" title="0">{
+                                if param.In == "path" </span><span class="cov0" title="0">{
+                                        pathParams = append(pathParams, PathParam{
+                                                Name: param.Name,
+                                                Type: utils.GetGoType(param.Schema),
+                                        })
+                                }</span>
+                        }
+
+                        <span class="cov8" title="1">routes = append(routes, Route{
+                                Method:        strings.ToUpper(method),
+                                Path:          ginPath,
+                                HandlerName:   handlerName,
+                                PathParams:    pathParams,
+                                HasPathParams: len(pathParams) &gt; 0,
+                        })</span>
+                }
+        }
+
+        <span class="cov8" title="1">data := struct {
+                PackageName string
+                ModuleName  string
+                Routes      []Route
+        }{
+                PackageName: packageName,
+                ModuleName:  moduleName,
+                Routes:      routes,
+        }
+
+        f, err := os.Create(filepath.Join(baseDir, "server", "server.go"))
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer f.Close()
+
+        return tmpl.Execute(f, data)</span>
+}
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package parser
+
+import (
+        "encoding/json"
+        "fmt"
+        "os"
+        "path/filepath"
+        "strings"
+
+        "github.com/shubhamku044/gopenapi/internal/models"
+        "golang.org/x/text/cases"
+        "golang.org/x/text/language"
+        "gopkg.in/yaml.v3"
+)
+
+// ParseSpecFile parses an OpenAPI specification file (YAML or JSON)
+func ParseSpecFile(filePath string) (*models.OpenAPISpec, error) <span class="cov8" title="1">{
+        data, err := os.ReadFile(filePath)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">var spec models.OpenAPISpec
+        ext := strings.ToLower(filepath.Ext(filePath))
+        if ext == ".yaml" || ext == ".yml" </span><span class="cov8" title="1">{
+                err = yaml.Unmarshal(data, &amp;spec)
+        }</span> else<span class="cov8" title="1"> if ext == ".json" </span><span class="cov8" title="1">{
+                err = json.Unmarshal(data, &amp;spec)
+        }</span> else<span class="cov8" title="1"> {
+                return nil, fmt.Errorf("unsupported file format: %s", ext)
+        }</span>
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        // Process the spec to add derived fields
+        <span class="cov8" title="1">ProcessSpec(&amp;spec)
+
+        return &amp;spec, nil</span>
+}
+
+// ProcessSpec processes the OpenAPI spec to add derived fields
+func ProcessSpec(spec *models.OpenAPISpec) <span class="cov8" title="1">{
+        // Add the HTTP method to each operation
+        for path, methods := range spec.Paths </span><span class="cov8" title="1">{
+                for method, op := range methods </span><span class="cov8" title="1">{
+                        op.Method = strings.ToUpper(method)
+
+                        // Add default tags if none are provided
+                        if len(op.Tags) == 0 </span><span class="cov8" title="1">{
+                                op.Tags = []string{"default"}
+                        }</span>
+
+                        // Handle missing operation IDs
+                        <span class="cov8" title="1">if op.OperationID == "" </span><span class="cov8" title="1">{
+                                // Generate a default operationID based on method and path
+                                pathParts := strings.Split(strings.Trim(path, "/"), "/")
+                                var name string
+                                if len(pathParts) &gt; 0 </span><span class="cov8" title="1">{
+                                        name = pathParts[len(pathParts)-1]
+                                }</span> else<span class="cov0" title="0"> {
+                                        name = "root"
+                                }</span>
+                                <span class="cov8" title="1">op.OperationID = strings.ToLower(method) + ToCamelCase(name)</span>
+                        }
+
+                        // Update the operation in the map
+                        <span class="cov8" title="1">methods[method] = op</span>
+                }
+        }
+}
+
+// ToCamelCase converts a string to CamelCase
+func ToCamelCase(s string) string <span class="cov8" title="1">{
+        // Convert snake_case or kebab-case to CamelCase
+        s = strings.ReplaceAll(s, "-", "_")
+        parts := strings.Split(s, "_")
+
+        // Use cases.Title from golang.org/x/text/cases instead of deprecated strings.Title
+        title := cases.Title(language.English)
+        for i := range parts </span><span class="cov8" title="1">{
+                if len(parts[i]) &gt; 0 </span><span class="cov8" title="1">{
+                        parts[i] = title.String(parts[i])
+                }</span>
+        }
+        <span class="cov8" title="1">return strings.Join(parts, "")</span>
+}
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package utils
+
+import (
+        "strings"
+
+        "github.com/shubhamku044/gopenapi/internal/models"
+        "golang.org/x/text/cases"
+        "golang.org/x/text/language"
+)
+
+// GetGoType converts an OpenAPI schema to a Go type
+func GetGoType(schema models.Schema) string <span class="cov8" title="1">{
+        // Handle $ref
+        if schema.Ref != "" </span><span class="cov8" title="1">{
+                // Extract the model name from the reference
+                parts := strings.Split(schema.Ref, "/")
+                return parts[len(parts)-1]
+        }</span>
+
+        // Handle different types
+        <span class="cov8" title="1">switch schema.Type </span>{
+        case "integer":<span class="cov8" title="1">
+                switch schema.Format </span>{
+                case "int32":<span class="cov8" title="1">
+                        return "int32"</span>
+                case "int64":<span class="cov8" title="1">
+                        return "int64"</span>
+                default:<span class="cov8" title="1">
+                        return "int"</span>
+                }
+        case "number":<span class="cov8" title="1">
+                switch schema.Format </span>{
+                case "float":<span class="cov8" title="1">
+                        return "float32"</span>
+                case "double":<span class="cov8" title="1">
+                        return "float64"</span>
+                default:<span class="cov8" title="1">
+                        return "float64"</span>
+                }
+        case "boolean":<span class="cov8" title="1">
+                return "bool"</span>
+        case "string":<span class="cov8" title="1">
+                switch schema.Format </span>{
+                case "byte":<span class="cov8" title="1">
+                        return "[]byte"</span>
+                case "binary":<span class="cov8" title="1">
+                        return "[]byte"</span>
+                case "date", "date-time":<span class="cov8" title="1">
+                        return "time.Time"</span>
+                default:<span class="cov8" title="1">
+                        return "string"</span>
+                }
+        case "array":<span class="cov8" title="1">
+                if schema.Items != nil </span><span class="cov8" title="1">{
+                        return "[]" + GetGoType(*schema.Items)
+                }</span>
+                <span class="cov8" title="1">return "[]interface{}"</span>
+        case "object":<span class="cov8" title="1">
+                return "map[string]interface{}"</span>
+        default:<span class="cov8" title="1">
+                return "interface{}"</span>
+        }
+}
+
+// ConvertPathToGin converts an OpenAPI path to a Gin path
+func ConvertPathToGin(path string) string <span class="cov8" title="1">{
+        // Convert OpenAPI path params {param} to Gin format :param
+        return strings.ReplaceAll(strings.ReplaceAll(path, "{", ":"), "}", "")
+}</span>
+
+// ToCamelCase converts a string to CamelCase
+func ToCamelCase(s string) string <span class="cov8" title="1">{
+        // Convert snake_case or kebab-case to CamelCase
+        s = strings.ReplaceAll(s, "-", "_")
+        parts := strings.Split(s, "_")
+
+        // Use cases.Title from golang.org/x/text/cases instead of deprecated strings.Title
+        title := cases.Title(language.English)
+        for i := range parts </span><span class="cov8" title="1">{
+                if len(parts[i]) &gt; 0 </span><span class="cov8" title="1">{
+                        parts[i] = title.String(parts[i])
+                }</span>
+        }
+        <span class="cov8" title="1">return strings.Join(parts, "")</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
