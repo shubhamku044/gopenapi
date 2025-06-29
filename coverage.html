@@ -59,11 +59,11 @@
 				
 				<option value="file1">github.com/shubhamku044/gopenapi/internal/generator/api.go (75.0%)</option>
 				
-				<option value="file2">github.com/shubhamku044/gopenapi/internal/generator/generator.go (88.3%)</option>
+				<option value="file2">github.com/shubhamku044/gopenapi/internal/generator/generator.go (87.6%)</option>
 				
-				<option value="file3">github.com/shubhamku044/gopenapi/internal/generator/main.go (57.9%)</option>
+				<option value="file3">github.com/shubhamku044/gopenapi/internal/generator/main.go (52.6%)</option>
 				
-				<option value="file4">github.com/shubhamku044/gopenapi/internal/generator/models.go (92.9%)</option>
+				<option value="file4">github.com/shubhamku044/gopenapi/internal/generator/models.go (87.1%)</option>
 				
 				<option value="file5">github.com/shubhamku044/gopenapi/internal/generator/readme.go (90.0%)</option>
 				
@@ -292,6 +292,7 @@ type API interface {
 		<pre class="file" id="file2" style="display: none">package generator
 
 import (
+        "fmt"
         "os"
         "path/filepath"
         "strings"
@@ -310,7 +311,7 @@ type Config struct {
 
 // GenerateCode generates all code from an OpenAPI spec with complete separation
 func GenerateCode(spec *models.OpenAPISpec, config Config) error <span class="cov8" title="1">{
-        if config.ModuleName == "" </span><span class="cov8" title="1">{
+        if config.ModuleName == "" </span><span class="cov0" title="0">{
                 config.ModuleName = config.PackageName
         }</span>
 
@@ -384,22 +385,25 @@ func createProjectStructure(baseDir string) error <span class="cov8" title="1">{
 }
 
 // GenerateGoModIfNotExists generates go.mod only if it doesn't exist
-func GenerateGoModIfNotExists(baseDir string, moduleName string) error <span class="cov8" title="1">{
-        goModPath := filepath.Join(baseDir, "go.mod")
-        if _, err := os.Stat(goModPath); !os.IsNotExist(err) </span><span class="cov8" title="1">{
-                return nil // Already exists, don't overwrite
+func GenerateGoModIfNotExists(outputDir, moduleName string) error <span class="cov8" title="1">{
+        goModPath := filepath.Join(outputDir, "go.mod")
+
+        // Check if go.mod already exists
+        if _, err := os.Stat(goModPath); err == nil </span><span class="cov8" title="1">{
+                // go.mod already exists, skip generation
+                return nil
         }</span>
 
-        <span class="cov8" title="1">goModContent := `module ` + moduleName + `
+        <span class="cov8" title="1">goModContent := fmt.Sprintf(`module %s
 
-go 1.22
+go 1.21
 
 require (
         github.com/gin-gonic/gin v1.10.0
 )
-`
+`, moduleName)
 
-        return os.WriteFile(goModPath, []byte(goModContent), 0644)</span>
+        return os.WriteFile(goModPath, []byte(goModContent), 0600)</span>
 }
 
 // GenerateUserMainIfNotExists generates main.go only if it doesn't exist
@@ -546,7 +550,7 @@ func GetAPIMethods() []APIMethod {
                         // Build parameters
                         <span class="cov8" title="1">var params []string
                         for _, param := range op.Parameters </span><span class="cov8" title="1">{
-                                if param.In == "path" </span><span class="cov8" title="1">{
+                                if param.In == pathParameterType </span><span class="cov8" title="1">{
                                         paramType := utils.GetGoType(param.Schema)
                                         params = append(params, param.Name+" "+paramType)
                                 }</span>
@@ -702,7 +706,7 @@ func (s *Server) setupRoutes() {
                                 Type string
                         }
                         for _, param := range op.Parameters </span><span class="cov8" title="1">{
-                                if param.In == "path" </span><span class="cov8" title="1">{
+                                if param.In == pathParameterType </span><span class="cov8" title="1">{
                                         pathParams = append(pathParams, struct {
                                                 Name string
                                                 Type string
@@ -840,7 +844,7 @@ func (h *APIHandlers) {{.HandlerName}}(c *gin.Context{{.Parameters}}) {
                         // Build parameters
                         <span class="cov8" title="1">var params []string
                         for _, param := range op.Parameters </span><span class="cov8" title="1">{
-                                if param.In == "path" </span><span class="cov8" title="1">{
+                                if param.In == pathParameterType </span><span class="cov8" title="1">{
                                         paramType := utils.GetGoType(param.Schema)
                                         params = append(params, param.Name+" "+paramType)
                                 }</span>
@@ -1105,7 +1109,7 @@ func main() {
         }
 
         f, err := os.Create(filepath.Join(baseDir, "main.go"))
-        if err != nil </span><span class="cov8" title="1">{
+        if err != nil </span><span class="cov0" title="0">{
                 return err
         }</span>
         <span class="cov8" title="1">defer f.Close()
@@ -1126,7 +1130,13 @@ import (
 )
 
 func GenerateModels(spec *models.OpenAPISpec, baseDir string) error <span class="cov8" title="1">{
-        needsTimeImport := false
+        // Create models directory if it doesn't exist
+        modelsDir := filepath.Join(baseDir, "models")
+        if err := os.MkdirAll(modelsDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">needsTimeImport := false
         for _, schema := range spec.Components.Schemas </span><span class="cov8" title="1">{
                 if hasTimeFields(schema) </span><span class="cov8" title="1">{
                         needsTimeImport = true
@@ -1205,7 +1215,7 @@ func hasTimeFields(schema models.Schema) bool <span class="cov8" title="1">{
                 }</span>
         }
 
-        <span class="cov8" title="1">if schema.Items != nil &amp;&amp; hasTimeFields(*schema.Items) </span><span class="cov8" title="1">{
+        <span class="cov8" title="1">if schema.Items != nil &amp;&amp; hasTimeFields(*schema.Items) </span><span class="cov0" title="0">{
                 return true
         }</span>
 

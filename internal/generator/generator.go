@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,22 +94,25 @@ func createProjectStructure(baseDir string) error {
 }
 
 // GenerateGoModIfNotExists generates go.mod only if it doesn't exist
-func GenerateGoModIfNotExists(baseDir string, moduleName string) error {
-	goModPath := filepath.Join(baseDir, "go.mod")
-	if _, err := os.Stat(goModPath); !os.IsNotExist(err) {
-		return nil // Already exists, don't overwrite
+func GenerateGoModIfNotExists(outputDir, moduleName string) error {
+	goModPath := filepath.Join(outputDir, "go.mod")
+
+	// Check if go.mod already exists
+	if _, err := os.Stat(goModPath); err == nil {
+		// go.mod already exists, skip generation
+		return nil
 	}
 
-	goModContent := `module ` + moduleName + `
+	goModContent := fmt.Sprintf(`module %s
 
-go 1.22
+go 1.21
 
 require (
 	github.com/gin-gonic/gin v1.10.0
 )
-`
+`, moduleName)
 
-	return os.WriteFile(goModPath, []byte(goModContent), 0644)
+	return os.WriteFile(goModPath, []byte(goModContent), 0600)
 }
 
 // GenerateUserMainIfNotExists generates main.go only if it doesn't exist
@@ -255,7 +259,7 @@ func GetAPIMethods() []APIMethod {
 			// Build parameters
 			var params []string
 			for _, param := range op.Parameters {
-				if param.In == "path" {
+				if param.In == pathParameterType {
 					paramType := utils.GetGoType(param.Schema)
 					params = append(params, param.Name+" "+paramType)
 				}
@@ -411,7 +415,7 @@ func (s *Server) setupRoutes() {
 				Type string
 			}
 			for _, param := range op.Parameters {
-				if param.In == "path" {
+				if param.In == pathParameterType {
 					pathParams = append(pathParams, struct {
 						Name string
 						Type string
@@ -549,7 +553,7 @@ func (h *APIHandlers) {{.HandlerName}}(c *gin.Context{{.Parameters}}) {
 			// Build parameters
 			var params []string
 			for _, param := range op.Parameters {
-				if param.In == "path" {
+				if param.In == pathParameterType {
 					paramType := utils.GetGoType(param.Schema)
 					params = append(params, param.Name+" "+paramType)
 				}

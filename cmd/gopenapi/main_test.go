@@ -22,7 +22,7 @@ func TestMainFunction(t *testing.T) {
 		// We test this by verifying the flag parsing works correctly
 		defer func() {
 			if r := recover(); r != nil {
-				// Expected behavior when no spec provided
+				t.Logf("Expected panic when no spec provided: %v", r)
 			}
 		}()
 	})
@@ -40,7 +40,7 @@ func TestMainFunction(t *testing.T) {
 		// This would normally call log.Fatal in main()
 		defer func() {
 			if r := recover(); r != nil {
-				// Expected behavior when spec file doesn't exist
+				t.Logf("Expected panic when spec file doesn't exist: %v", r)
 			}
 		}()
 	})

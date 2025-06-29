@@ -10,6 +10,12 @@ import (
 )
 
 func GenerateModels(spec *models.OpenAPISpec, baseDir string) error {
+	// Create models directory if it doesn't exist
+	modelsDir := filepath.Join(baseDir, "models")
+	if err := os.MkdirAll(modelsDir, 0755); err != nil {
+		return err
+	}
+
 	needsTimeImport := false
 	for _, schema := range spec.Components.Schemas {
 		if hasTimeFields(schema) {
