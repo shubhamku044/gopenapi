@@ -8,6 +8,8 @@ import (
 
 	"github.com/shubhamku044/gopenapi/internal/models"
 	"github.com/shubhamku044/gopenapi/pkg/utils"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // PathParam represents a path parameter for route generation
@@ -26,12 +28,12 @@ type Route struct {
 }
 
 // GenerateServerFile generates the server file
-func GenerateServerFile(spec *models.OpenAPISpec, baseDir string, packageName string) error {
+func GenerateServerFile(spec *models.OpenAPISpec, baseDir string, packageName string, moduleName string) error {
 	serverTemplate := `package server
 
 import (
 	"github.com/gin-gonic/gin"
-	"{{.PackageName}}/generated/api"
+	"{{.ModuleName}}/api"
 )
 
 // Server represents the API server
@@ -105,6 +107,7 @@ func (s *Server) setupRoutes() {
 
 	// Prepare route data
 	var routes []Route
+	caser := cases.Title(language.English)
 	for path, operations := range spec.Paths {
 		for method, op := range operations {
 			ginPath := utils.ConvertPathToGin(path)
@@ -122,7 +125,7 @@ func (s *Server) setupRoutes() {
 			}
 
 			routes = append(routes, Route{
-				Method:        strings.Title(strings.ToUpper(method)),
+				Method:        caser.String(strings.ToUpper(method)),
 				Path:          ginPath,
 				HandlerName:   handlerName,
 				PathParams:    pathParams,
@@ -133,9 +136,11 @@ func (s *Server) setupRoutes() {
 
 	data := struct {
 		PackageName string
+		ModuleName  string
 		Routes      []Route
 	}{
 		PackageName: packageName,
+		ModuleName:  moduleName,
 		Routes:      routes,
 	}
 
