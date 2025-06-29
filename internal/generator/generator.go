@@ -562,14 +562,49 @@ func (h *APIHandlers) {{.HandlerName}}(c *gin.Context{{.Parameters}}) {
 
 			// Generate example code based on method
 			var exampleCode string
+			hasModels := len(spec.Components.Schemas) > 0
+
 			switch strings.ToUpper(method) {
 			case "GET":
-				exampleCode = `c.JSON(http.StatusOK, gin.H{
+				if hasModels && (strings.Contains(path, "user") || strings.Contains(handlerName, "User")) {
+					exampleCode = `// TODO: Implement your business logic here
+	// Example with sample data
+	users := []models.User{
+		{
+			Id:    "1",
+			Name:  "John Doe", 
+			Email: "john@example.com",
+		},
+	}
+	
+	c.JSON(http.StatusOK, users)`
+				} else {
+					exampleCode = `// TODO: Implement your business logic here
+	
+	c.JSON(http.StatusOK, gin.H{
 		"message": "Success",
 		"data":    nil, // Replace with your data
 	})`
+				}
 			case "POST":
-				exampleCode = `// Example: Parse request body
+				if hasModels && (strings.Contains(path, "user") || strings.Contains(handlerName, "User")) {
+					exampleCode = `// TODO: Implement your business logic here
+	
+	// Parse request body
+	var user models.User
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	// Generate ID for new user (in real app, use UUID or database ID)
+	user.Id = "generated-id-123"
+	
+	c.JSON(http.StatusCreated, user)`
+				} else {
+					exampleCode = `// TODO: Implement your business logic here
+	
+	// Example: Parse request body
 	// var request models.SomeModel
 	// if err := c.ShouldBindJSON(&request); err != nil {
 	//     c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -579,14 +614,21 @@ func (h *APIHandlers) {{.HandlerName}}(c *gin.Context{{.Parameters}}) {
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Created successfully",
 	})`
+				}
 			case "PUT":
-				exampleCode = `c.JSON(http.StatusOK, gin.H{
+				exampleCode = `// TODO: Implement your business logic here
+	
+	c.JSON(http.StatusOK, gin.H{
 		"message": "Updated successfully",
 	})`
 			case "DELETE":
-				exampleCode = `c.JSON(http.StatusNoContent, nil)`
+				exampleCode = `// TODO: Implement your business logic here
+	
+	c.JSON(http.StatusNoContent, nil)`
 			default:
-				exampleCode = `c.JSON(http.StatusNotImplemented, gin.H{
+				exampleCode = `// TODO: Implement your business logic here
+	
+	c.JSON(http.StatusNotImplemented, gin.H{
 		"error": "Not implemented yet",
 	})`
 			}

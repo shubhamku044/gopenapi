@@ -162,65 +162,10 @@ benchmark: ## Run benchmarks
 # Code generation targets
 generate-example: build ## Generate code in the example project
 	@echo "$(GREEN)Generating code in example project...$(RESET)"
-	@cd example && ../$(BUILD_DIR)/$(BINARY_NAME) --spec=sample-api.yaml
+	@cd example && ../$(BUILD_DIR)/$(BINARY_NAME) --spec=api.yaml
 	@echo "$(GREEN)✓ Code generated in example/ directory$(RESET)"
 	@echo "$(CYAN)Generated files:$(RESET)"
 	@find example -type f -name "*.go" | grep -E "(generated|handlers|main)" | sort
-
-build-example: generate-example ## Build the example API server
-	@echo "$(GREEN)Building example API server...$(RESET)"
-	@cd example && go mod tidy && go build -o api-server .
-	@echo "$(GREEN)✓ Example server built: example/api-server$(RESET)"
-
-run-example: build-example ## Build and run the example API server
-	@echo "$(GREEN)Starting example API server...$(RESET)"
-	@echo "$(CYAN)Server will start on http://localhost:8080$(RESET)"
-	@echo "$(CYAN)Available endpoints:$(RESET)"
-	@echo "  GET  /health      - Health check"
-	@echo "  GET  /ping        - Ping endpoint"
-	@echo "  GET  /users       - List users"
-	@echo "  POST /users       - Create user"
-	@echo "  GET  /users/:id   - Get user by ID"
-	@echo ""
-	@echo "$(YELLOW)Press Ctrl+C to stop the server$(RESET)"
-	@cd example && ./api-server
-
-# Workflow demonstration targets
-demo-workflow: build ## Demonstrate the complete user workflow
-	@echo "$(GREEN)🚀 Demonstrating gopenapi workflow...$(RESET)"
-	@echo ""
-	@echo "$(CYAN)Step 1: Create a new project$(RESET)"
-	@rm -rf demo-project
-	@mkdir demo-project
-	@cd demo-project && go mod init github.com/demo/my-api
-	@echo "✓ Created project with go mod init"
-	@echo ""
-	@echo "$(CYAN)Step 2: Create OpenAPI specification$(RESET)"
-	@cp example/sample-api.yaml demo-project/api.yaml
-	@echo "✓ Added api.yaml to project"
-	@echo ""
-	@echo "$(CYAN)Step 3: Generate code with gopenapi$(RESET)"
-	@cd demo-project && ../$(BUILD_DIR)/$(BINARY_NAME) --spec=api.yaml
-	@echo "✓ Generated complete project structure"
-	@echo ""
-	@echo "$(CYAN)Step 4: Build and test$(RESET)"
-	@cd demo-project && go mod tidy && go build -o my-api .
-	@echo "✓ Project builds successfully"
-	@echo ""
-	@echo "$(GREEN)🎉 Workflow complete! Check demo-project/ for the generated API$(RESET)"
-	@echo "$(CYAN)Project structure:$(RESET)"
-	@find demo-project -type f | grep -v ".git" | sort
-
-clean-demo: ## Clean demo project
-	@echo "$(GREEN)Cleaning demo project...$(RESET)"
-	@rm -rf demo-project
-	@echo "$(GREEN)✓ Demo project cleaned$(RESET)"
-
-# Legacy targets (for backward compatibility)
-generate-sample: generate-example ## Alias for generate-example
-run-sample: run-example ## Alias for run-example  
-build-generated: build-example ## Alias for build-example
-run-generated: run-example ## Alias for run-example
 
 # Cross-compilation targets
 cross-compile: ## Build for all platforms
@@ -283,15 +228,15 @@ example-basic: build ## Run basic example in current directory
 	@echo "$(GREEN)Running basic example...$(RESET)"
 	@rm -rf example-basic && mkdir example-basic
 	@cd example-basic && go mod init example-basic
-	@cp example/sample-api.yaml example-basic/
-	@cd example-basic && ../$(BUILD_DIR)/$(BINARY_NAME) --spec=sample-api.yaml
+	@cp example/api.yaml example-basic/
+	@cd example-basic && ../$(BUILD_DIR)/$(BINARY_NAME) --spec=api.yaml
 	@echo "$(GREEN)✓ Example complete. Check ./example-basic/$(RESET)"
 
 example-custom: build ## Run example with custom package name
 	@echo "$(GREEN)Running custom package example...$(RESET)"
 	@rm -rf example-custom && mkdir example-custom
 	@cd example-custom && go mod init github.com/myuser/custom-api
-	@cp example/sample-api.yaml example-custom/api.yaml
+	@cp example/api.yaml example-custom/api.yaml
 	@cd example-custom && ../$(BUILD_DIR)/$(BINARY_NAME) --spec=api.yaml --package=myapi
 	@echo "$(GREEN)✓ Custom example complete. Check ./example-custom/$(RESET)"
 

@@ -32,29 +32,29 @@ func main() {
 		log.Fatalf("Failed to parse OpenAPI specification: %v", err)
 	}
 
-	// Auto-detect package name from existing go.mod if not provided
-	pkg := *packageName
+	// Always try to read module name from go.mod first
 	moduleName := ""
-
-	if pkg == "" {
-		// Try to read go.mod to get module name
-		goModPath := filepath.Join(*outputDir, "go.mod")
-		if content, err := os.ReadFile(goModPath); err == nil {
-			contentStr := string(content)
-			lines := strings.Split(contentStr, "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if strings.HasPrefix(line, "module ") {
-					moduleName = strings.TrimSpace(line[7:])
-					// Extract package name from module (last part after /)
-					pkg = filepath.Base(moduleName)
-					break
-				}
+	goModPath := filepath.Join(*outputDir, "go.mod")
+	if content, err := os.ReadFile(goModPath); err == nil {
+		contentStr := string(content)
+		lines := strings.Split(contentStr, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "module ") {
+				moduleName = strings.TrimSpace(line[7:])
+				break
 			}
 		}
+	}
 
-		// Fallback to directory name if still not found
-		if pkg == "" {
+	// Determine package name
+	pkg := *packageName
+	if pkg == "" {
+		if moduleName != "" {
+			// Extract package name from module (last part after /)
+			pkg = filepath.Base(moduleName)
+		} else {
+			// Fallback to directory name if no go.mod found
 			absPath, err := filepath.Abs(*outputDir)
 			if err == nil {
 				pkg = filepath.Base(absPath)
@@ -65,7 +65,7 @@ func main() {
 		}
 	}
 
-	// Use package name as module name if not detected from go.mod
+	// Use package name as module name fallback if no go.mod found
 	if moduleName == "" {
 		moduleName = pkg
 	}
@@ -84,7 +84,19 @@ func main() {
 	fmt.Printf("✅ Code successfully generated in %s\n", *outputDir)
 	fmt.Printf("📦 Module: %s\n", moduleName)
 	fmt.Printf("📁 Package: %s\n", pkg)
+
+	// Check if dependencies need to be installed
+	goModExists := false
+	if _, err := os.Stat(filepath.Join(*outputDir, "go.mod")); err == nil {
+		goModExists = true
+	}
+
 	fmt.Println("\n🚀 Next steps:")
-	fmt.Println("   go mod tidy")
-	fmt.Println("   go run main.go")
+	if goModExists {
+		fmt.Println("   go mod tidy                    # Install/update dependencies")
+	} else {
+		fmt.Println("   go mod init <your-module-name> # Initialize Go module first")
+		fmt.Println("   go mod tidy                    # Install dependencies")
+	}
+	fmt.Println("   go run main.go                 # Start your API server")
 }
