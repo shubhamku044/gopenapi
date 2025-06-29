@@ -73,7 +73,7 @@ func ToCamelCase(s string) string {
 	// Convert snake_case or kebab-case to CamelCase
 	s = strings.ReplaceAll(s, "-", "_")
 	parts := strings.Split(s, "_")
-	
+
 	// Use cases.Title from golang.org/x/text/cases instead of deprecated strings.Title
 	title := cases.Title(language.English)
 	for i := range parts {

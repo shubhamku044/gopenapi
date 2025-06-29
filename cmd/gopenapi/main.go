@@ -46,7 +46,7 @@ func main() {
 		OutputDir:   *outputDir,
 		PackageName: pkg,
 	}
-	
+
 	err = generator.GenerateCode(spec, config)
 	if err != nil {
 		log.Fatalf("Failed to generate code: %v", err)

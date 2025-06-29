@@ -11,18 +11,28 @@ import (
 type Config struct {
 	OutputDir   string
 	PackageName string
+	ModuleName  string
 }
 
 // GenerateCode generates all code from an OpenAPI spec
 func GenerateCode(spec *models.OpenAPISpec, config Config) error {
+	if config.ModuleName == "" {
+		config.ModuleName = config.PackageName
+	}
+
 	// Create the output directory structure
 	err := createDirectories(config.OutputDir)
 	if err != nil {
 		return err
 	}
 
+	err = GenerateGoMod(config.OutputDir, config.ModuleName)
+	if err != nil {
+		return err
+	}
+
 	// Generate server
-	err = GenerateServerFile(spec, config.OutputDir, config.PackageName)
+	err = GenerateServerFile(spec, config.OutputDir, config.PackageName, config.ModuleName)
 	if err != nil {
 		return err
 	}
@@ -65,4 +75,24 @@ func createDirectories(baseDir string) error {
 	}
 
 	return nil
+}
+
+func GenerateGoMod(baseDir string, moduleName string) error {
+	goModContent := `module ` + moduleName + `
+
+go 1.22
+
+require (
+	github.com/gin-gonic/gin v1.10.0
+)
+`
+
+	f, err := os.Create(filepath.Join(baseDir, "go.mod"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(goModContent)
+	return err
 }
