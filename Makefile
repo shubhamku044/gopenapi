@@ -46,8 +46,8 @@ help: ## Show this help message
 	@echo "$(GREEN)Examples:$(RESET)"
 	@echo "  make build                    # Build the binary"
 	@echo "  make install                  # Build and install globally"
-	@echo "  make generate-sample          # Generate code from sample API"
-	@echo "  make run-generated           # Build and run the generated server"
+	@echo "  make demo-workflow            # Demonstrate complete user workflow"
+	@echo "  make run-example             # Build and run the example server"
 	@echo "  make dev-setup               # Set up development environment"
 	@echo "  make release                 # Build for all platforms"
 
@@ -160,39 +160,67 @@ benchmark: ## Run benchmarks
 	$(GO) test -bench=. -benchmem ./...
 
 # Code generation targets
-generate-sample: build ## Generate code from sample API
-	@echo "$(GREEN)Generating code from $(SAMPLE_API)...$(RESET)"
-	@rm -rf $(GENERATED_DIR)
-	./$(BUILD_DIR)/$(BINARY_NAME) --spec=$(SAMPLE_API) --output=$(GENERATED_DIR) --package=sample
-	@echo "$(GREEN)✓ Code generated in $(GENERATED_DIR)/$(RESET)"
+generate-example: build ## Generate code in the example project
+	@echo "$(GREEN)Generating code in example project...$(RESET)"
+	@cd example && ../$(BUILD_DIR)/$(BINARY_NAME) --spec=sample-api.yaml
+	@echo "$(GREEN)✓ Code generated in example/ directory$(RESET)"
 	@echo "$(CYAN)Generated files:$(RESET)"
-	@find $(GENERATED_DIR) -type f | sort
+	@find example -type f -name "*.go" | grep -E "(generated|handlers|main)" | sort
 
-run-sample: generate-sample ## Build and run sample generation
-	@echo "$(GREEN)Sample generation completed!$(RESET)"
-	@echo "$(CYAN)Check the $(GENERATED_DIR)/ directory for generated code.$(RESET)"
+build-example: generate-example ## Build the example API server
+	@echo "$(GREEN)Building example API server...$(RESET)"
+	@cd example && go mod tidy && go build -o api-server .
+	@echo "$(GREEN)✓ Example server built: example/api-server$(RESET)"
 
-# Generated code targets
-build-generated: ## Build the generated API server
-	@if [ ! -d "$(GENERATED_DIR)" ]; then \
-		echo "$(RED)Error: No generated code found. Run 'make generate-sample' first.$(RESET)"; \
-		exit 1; \
-	fi
-	@echo "$(GREEN)Building generated API server...$(RESET)"
-	@cd $(GENERATED_DIR) && go mod tidy && go build -o api-server .
-	@echo "$(GREEN)✓ Generated server built: $(GENERATED_DIR)/api-server$(RESET)"
-
-run-generated: build-generated ## Build and run the generated API server
-	@echo "$(GREEN)Starting generated API server...$(RESET)"
+run-example: build-example ## Build and run the example API server
+	@echo "$(GREEN)Starting example API server...$(RESET)"
 	@echo "$(CYAN)Server will start on http://localhost:8080$(RESET)"
 	@echo "$(CYAN)Available endpoints:$(RESET)"
 	@echo "  GET  /health      - Health check"
+	@echo "  GET  /ping        - Ping endpoint"
 	@echo "  GET  /users       - List users"
 	@echo "  POST /users       - Create user"
 	@echo "  GET  /users/:id   - Get user by ID"
 	@echo ""
 	@echo "$(YELLOW)Press Ctrl+C to stop the server$(RESET)"
-	@cd $(GENERATED_DIR) && ./api-server
+	@cd example && ./api-server
+
+# Workflow demonstration targets
+demo-workflow: build ## Demonstrate the complete user workflow
+	@echo "$(GREEN)🚀 Demonstrating gopenapi workflow...$(RESET)"
+	@echo ""
+	@echo "$(CYAN)Step 1: Create a new project$(RESET)"
+	@rm -rf demo-project
+	@mkdir demo-project
+	@cd demo-project && go mod init github.com/demo/my-api
+	@echo "✓ Created project with go mod init"
+	@echo ""
+	@echo "$(CYAN)Step 2: Create OpenAPI specification$(RESET)"
+	@cp example/sample-api.yaml demo-project/api.yaml
+	@echo "✓ Added api.yaml to project"
+	@echo ""
+	@echo "$(CYAN)Step 3: Generate code with gopenapi$(RESET)"
+	@cd demo-project && ../$(BUILD_DIR)/$(BINARY_NAME) --spec=api.yaml
+	@echo "✓ Generated complete project structure"
+	@echo ""
+	@echo "$(CYAN)Step 4: Build and test$(RESET)"
+	@cd demo-project && go mod tidy && go build -o my-api .
+	@echo "✓ Project builds successfully"
+	@echo ""
+	@echo "$(GREEN)🎉 Workflow complete! Check demo-project/ for the generated API$(RESET)"
+	@echo "$(CYAN)Project structure:$(RESET)"
+	@find demo-project -type f | grep -v ".git" | sort
+
+clean-demo: ## Clean demo project
+	@echo "$(GREEN)Cleaning demo project...$(RESET)"
+	@rm -rf demo-project
+	@echo "$(GREEN)✓ Demo project cleaned$(RESET)"
+
+# Legacy targets (for backward compatibility)
+generate-sample: generate-example ## Alias for generate-example
+run-sample: run-example ## Alias for run-example  
+build-generated: build-example ## Alias for build-example
+run-generated: run-example ## Alias for run-example
 
 # Cross-compilation targets
 cross-compile: ## Build for all platforms
@@ -230,7 +258,7 @@ docker-build: ## Build Docker image
 clean: ## Clean build artifacts
 	@echo "$(GREEN)Cleaning build artifacts...$(RESET)"
 	rm -rf $(BUILD_DIR)
-	rm -rf $(GENERATED_DIR)
+	rm -rf demo-project example-basic example-custom
 	rm -f coverage.out coverage.html
 	@echo "$(GREEN)✓ Clean complete$(RESET)"
 
@@ -251,15 +279,21 @@ show-config: ## Show build configuration
 	@echo "  Go version:  $$($(GO) version)"
 
 # Example workflows
-example-basic: build ## Run basic example
+example-basic: build ## Run basic example in current directory
 	@echo "$(GREEN)Running basic example...$(RESET)"
-	./$(BUILD_DIR)/$(BINARY_NAME) --spec=$(SAMPLE_API) --output=./example-output
-	@echo "$(GREEN)✓ Example complete. Check ./example-output/$(RESET)"
+	@rm -rf example-basic && mkdir example-basic
+	@cd example-basic && go mod init example-basic
+	@cp example/sample-api.yaml example-basic/
+	@cd example-basic && ../$(BUILD_DIR)/$(BINARY_NAME) --spec=sample-api.yaml
+	@echo "$(GREEN)✓ Example complete. Check ./example-basic/$(RESET)"
 
 example-custom: build ## Run example with custom package name
 	@echo "$(GREEN)Running custom package example...$(RESET)"
-	./$(BUILD_DIR)/$(BINARY_NAME) --spec=$(SAMPLE_API) --output=./custom-output --package=myapi
-	@echo "$(GREEN)✓ Custom example complete. Check ./custom-output/$(RESET)"
+	@rm -rf example-custom && mkdir example-custom
+	@cd example-custom && go mod init github.com/myuser/custom-api
+	@cp example/sample-api.yaml example-custom/api.yaml
+	@cd example-custom && ../$(BUILD_DIR)/$(BINARY_NAME) --spec=api.yaml --package=myapi
+	@echo "$(GREEN)✓ Custom example complete. Check ./example-custom/$(RESET)"
 
 # Watch for changes (requires entr or similar)
 watch: ## Watch for changes and rebuild (requires 'entr')
@@ -272,17 +306,17 @@ watch: ## Watch for changes and rebuild (requires 'entr')
 
 # Help for specific file
 inspect: ## Show information about generated files
-	@if [ -d "$(GENERATED_DIR)" ]; then \
-		echo "$(CYAN)Generated files:$(RESET)"; \
-		find $(GENERATED_DIR) -type f -name "*.go" | while read file; do \
+	@if [ -d "example/generated" ]; then \
+		echo "$(CYAN)Generated files in example/:$(RESET)"; \
+		find example -type f -name "*.go" | while read file; do \
 			echo "  $$file ($$(wc -l < "$$file") lines)"; \
 		done; \
-		if [ -f "$(GENERATED_DIR)/api-server" ]; then \
+		if [ -f "example/api-server" ]; then \
 			echo "$(CYAN)Compiled binary:$(RESET)"; \
-			echo "  $(GENERATED_DIR)/api-server ($$(ls -lh $(GENERATED_DIR)/api-server | awk '{print $$5}'))"; \
+			echo "  example/api-server ($$(ls -lh example/api-server | awk '{print $$5}'))"; \
 		fi; \
 	else \
-		echo "$(YELLOW)No generated files found. Run 'make generate-sample' first.$(RESET)"; \
+		echo "$(YELLOW)No generated files found. Run 'make generate-example' first.$(RESET)"; \
 	fi
 
 # Install development tools
