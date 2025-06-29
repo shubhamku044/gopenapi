@@ -32,7 +32,7 @@ RESET := \033[0m
 
 .PHONY: help build install uninstall clean test lint fmt vet deps update-deps \
         generate-sample run-sample docker-build release cross-compile \
-        dev-setup check all
+        dev-setup check all run-generated build-generated
 
 # Default target
 all: clean fmt vet test build
@@ -47,6 +47,7 @@ help: ## Show this help message
 	@echo "  make build                    # Build the binary"
 	@echo "  make install                  # Build and install globally"
 	@echo "  make generate-sample          # Generate code from sample API"
+	@echo "  make run-generated           # Build and run the generated server"
 	@echo "  make dev-setup               # Set up development environment"
 	@echo "  make release                 # Build for all platforms"
 
@@ -171,6 +172,28 @@ run-sample: generate-sample ## Build and run sample generation
 	@echo "$(GREEN)Sample generation completed!$(RESET)"
 	@echo "$(CYAN)Check the $(GENERATED_DIR)/ directory for generated code.$(RESET)"
 
+# Generated code targets
+build-generated: ## Build the generated API server
+	@if [ ! -d "$(GENERATED_DIR)" ]; then \
+		echo "$(RED)Error: No generated code found. Run 'make generate-sample' first.$(RESET)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Building generated API server...$(RESET)"
+	@cd $(GENERATED_DIR) && go mod tidy && go build -o api-server .
+	@echo "$(GREEN)✓ Generated server built: $(GENERATED_DIR)/api-server$(RESET)"
+
+run-generated: build-generated ## Build and run the generated API server
+	@echo "$(GREEN)Starting generated API server...$(RESET)"
+	@echo "$(CYAN)Server will start on http://localhost:8080$(RESET)"
+	@echo "$(CYAN)Available endpoints:$(RESET)"
+	@echo "  GET  /health      - Health check"
+	@echo "  GET  /users       - List users"
+	@echo "  POST /users       - Create user"
+	@echo "  GET  /users/:id   - Get user by ID"
+	@echo ""
+	@echo "$(YELLOW)Press Ctrl+C to stop the server$(RESET)"
+	@cd $(GENERATED_DIR) && ./api-server
+
 # Cross-compilation targets
 cross-compile: ## Build for all platforms
 	@echo "$(GREEN)Cross-compiling for all platforms...$(RESET)"
@@ -254,6 +277,10 @@ inspect: ## Show information about generated files
 		find $(GENERATED_DIR) -type f -name "*.go" | while read file; do \
 			echo "  $$file ($$(wc -l < "$$file") lines)"; \
 		done; \
+		if [ -f "$(GENERATED_DIR)/api-server" ]; then \
+			echo "$(CYAN)Compiled binary:$(RESET)"; \
+			echo "  $(GENERATED_DIR)/api-server ($$(ls -lh $(GENERATED_DIR)/api-server | awk '{print $$5}'))"; \
+		fi; \
 	else \
 		echo "$(YELLOW)No generated files found. Run 'make generate-sample' first.$(RESET)"; \
 	fi

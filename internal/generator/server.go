@@ -12,13 +12,11 @@ import (
 	"golang.org/x/text/language"
 )
 
-// PathParam represents a path parameter for route generation
 type PathParam struct {
 	Name string
 	Type string
 }
 
-// Route represents a route for the server
 type Route struct {
 	Method        string
 	Path          string
@@ -27,7 +25,6 @@ type Route struct {
 	HasPathParams bool
 }
 
-// GenerateServerFile generates the server file
 func GenerateServerFile(spec *models.OpenAPISpec, baseDir string, packageName string, moduleName string) error {
 	serverTemplate := `package server
 
@@ -105,7 +102,6 @@ func (s *Server) setupRoutes() {
 		return err
 	}
 
-	// Prepare route data
 	var routes []Route
 	caser := cases.Title(language.English)
 	for path, operations := range spec.Paths {
@@ -113,7 +109,6 @@ func (s *Server) setupRoutes() {
 			ginPath := utils.ConvertPathToGin(path)
 			handlerName := utils.ToCamelCase(op.OperationID)
 
-			// Extract path parameters
 			var pathParams []PathParam
 			for _, param := range op.Parameters {
 				if param.In == "path" {

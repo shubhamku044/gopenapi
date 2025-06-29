@@ -10,7 +10,6 @@ import (
 	"github.com/shubhamku044/gopenapi/pkg/utils"
 )
 
-// Handler represents an API handler
 type Handler struct {
 	Method        string
 	Path          string
@@ -21,7 +20,6 @@ type Handler struct {
 	HasPathParams bool
 }
 
-// GenerateAPIFile generates the API interface file
 func GenerateAPIFile(spec *models.OpenAPISpec, baseDir string) error {
 	apiTemplate := `package api
 
@@ -61,11 +59,9 @@ func (a *DefaultAPI) {{.HandlerName}}(c *gin.Context{{if .HasPathParams}}, {{ran
 		return err
 	}
 
-	// Transform the operations for template rendering
 	var handlers []Handler
 	for path, operations := range spec.Paths {
 		for method, op := range operations {
-			// Extract path parameters
 			var pathParams []PathParam
 			for _, param := range op.Parameters {
 				if param.In == "path" {
