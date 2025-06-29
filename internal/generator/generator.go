@@ -17,59 +17,54 @@ type Config struct {
 	ModuleName  string
 }
 
-// GenerateCode generates all code from an OpenAPI spec
+// GenerateCode generates all code from an OpenAPI spec with complete separation
 func GenerateCode(spec *models.OpenAPISpec, config Config) error {
 	if config.ModuleName == "" {
 		config.ModuleName = config.PackageName
 	}
 
-	// Create the output directory structure
-	err := createDirectories(config.OutputDir)
+	// Create directory structure with separation
+	err := createProjectStructure(config.OutputDir)
 	if err != nil {
 		return err
 	}
 
-	// Generate go.mod file for the generated code
-	err = GenerateGoMod(config.OutputDir, config.ModuleName)
+	// Generate go.mod ONLY if it doesn't exist (user's project)
+	err = GenerateGoModIfNotExists(config.OutputDir, config.ModuleName)
 	if err != nil {
 		return err
 	}
 
-	// Generate main.go file only if it doesn't exist (user might have customized it)
-	mainPath := filepath.Join(config.OutputDir, "main.go")
-	if _, err := os.Stat(mainPath); os.IsNotExist(err) {
-		err = GenerateMainFile(spec, config.OutputDir, config.ModuleName)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Always regenerate server (infrastructure code)
-	err = GenerateServerFile(spec, config.OutputDir, config.PackageName, config.ModuleName)
+	// Generate user's main.go ONLY if it doesn't exist
+	err = GenerateUserMainIfNotExists(spec, config.OutputDir, config.ModuleName)
 	if err != nil {
 		return err
 	}
 
-	// Always regenerate API interfaces (based on OpenAPI spec)
-	err = GenerateAPIFile(spec, config.OutputDir)
+	// Always regenerate the generated/ directory (safe to overwrite)
+	err = GenerateInterfaces(spec, config.OutputDir, config.ModuleName)
 	if err != nil {
 		return err
 	}
 
-	// Always regenerate models (based on OpenAPI spec)
-	err = GenerateModels(spec, config.OutputDir)
+	err = GenerateModels(spec, filepath.Join(config.OutputDir, "generated"))
 	if err != nil {
 		return err
 	}
 
-	// Generate README.md with usage examples
+	err = GenerateRouter(spec, config.OutputDir, config.ModuleName)
+	if err != nil {
+		return err
+	}
+
+	// Generate handler templates ONLY if they don't exist
+	err = GenerateHandlerTemplates(spec, config.OutputDir, config.ModuleName)
+	if err != nil {
+		return err
+	}
+
+	// Always regenerate documentation
 	err = GenerateReadme(spec, config.OutputDir, config.PackageName)
-	if err != nil {
-		return err
-	}
-
-	// Generate implementation template if it doesn't exist
-	err = GenerateImplementationTemplate(spec, config.OutputDir, config.ModuleName)
 	if err != nil {
 		return err
 	}
@@ -77,172 +72,14 @@ func GenerateCode(spec *models.OpenAPISpec, config Config) error {
 	return nil
 }
 
-// GenerateImplementationTemplate generates a template showing users where to implement business logic
-func GenerateImplementationTemplate(spec *models.OpenAPISpec, baseDir string, moduleName string) error {
-	implPath := filepath.Join(baseDir, "api", "implementation.go")
-
-	// Only generate if it doesn't exist (user might have implemented it)
-	if _, err := os.Stat(implPath); !os.IsNotExist(err) {
-		return nil
-	}
-
-	implTemplate := `package api
-
-import (
-	"net/http"
-	"github.com/gin-gonic/gin"
-)
-
-// APIImplementation provides a concrete implementation of the API interface
-// TODO: Implement your business logic in these methods
-type APIImplementation struct {
-	// Add your dependencies here (database, services, etc.)
-	// db     *sql.DB
-	// logger *log.Logger
-}
-
-// NewAPI creates a new API implementation
-func NewAPI() API {
-	return &APIImplementation{
-		// Initialize your dependencies here
-	}
-}
-
-{{range .Operations}}
-// {{.HandlerName}} {{.Description}}
-{{.Comment}}
-func (impl *APIImplementation) {{.HandlerName}}(c *gin.Context{{.Params}}) {
-	// TODO: Implement your business logic here
-	{{.DefaultResponse}}
-}
-
-{{end}}`
-
-	tmpl, err := template.New("implementation").Parse(implTemplate)
-	if err != nil {
-		return err
-	}
-
-	// Prepare operations data
-	var operations []struct {
-		HandlerName     string
-		Description     string
-		Comment         string
-		Params          string
-		DefaultResponse string
-	}
-
-	for path, pathOps := range spec.Paths {
-		for method, op := range pathOps {
-			handlerName := utils.ToCamelCase(op.OperationID)
-			description := op.Summary
-			if description == "" {
-				description = op.Description
-			}
-
-			// Build comment
-			comment := "// " + strings.ToUpper(method) + " " + path
-			if description != "" {
-				comment += "\n// " + description
-			}
-
-			// Build parameters
-			var params []string
-			for _, param := range op.Parameters {
-				if param.In == "path" {
-					params = append(params, param.Name+" string")
-				}
-			}
-			paramStr := ""
-			if len(params) > 0 {
-				paramStr = ", " + strings.Join(params, ", ")
-			}
-
-			// Default response based on method
-			defaultResp := `c.JSON(http.StatusNotImplemented, gin.H{
-		"error": "Not implemented",
-		"message": "Please implement this endpoint",
-	})`
-
-			if strings.ToUpper(method) == "POST" {
-				defaultResp = `c.JSON(http.StatusCreated, gin.H{
-		"message": "Created successfully",
-	})`
-			} else if strings.ToUpper(method) == "GET" {
-				defaultResp = `c.JSON(http.StatusOK, gin.H{
-		"data": "TODO: Return your data here",
-	})`
-			}
-
-			operations = append(operations, struct {
-				HandlerName     string
-				Description     string
-				Comment         string
-				Params          string
-				DefaultResponse string
-			}{
-				HandlerName:     handlerName,
-				Description:     description,
-				Comment:         comment,
-				Params:          paramStr,
-				DefaultResponse: defaultResp,
-			})
-		}
-	}
-
-	data := struct {
-		ModuleName string
-		HasModels  bool
-		Operations []struct {
-			HandlerName     string
-			Description     string
-			Comment         string
-			Params          string
-			DefaultResponse string
-		}
-	}{
-		ModuleName: moduleName,
-		HasModels:  len(spec.Components.Schemas) > 0,
-		Operations: operations,
-	}
-
-	f, err := os.Create(implPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	return tmpl.Execute(f, data)
-}
-
-// GenerateGoMod generates a go.mod file for the generated code
-func GenerateGoMod(baseDir string, moduleName string) error {
-	goModContent := `module ` + moduleName + `
-
-go 1.22
-
-require (
-	github.com/gin-gonic/gin v1.10.0
-)
-`
-
-	f, err := os.Create(filepath.Join(baseDir, "go.mod"))
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = f.WriteString(goModContent)
-	return err
-}
-
-// createDirectories creates the output directory structure
-func createDirectories(baseDir string) error {
+// createProjectStructure creates the separated directory structure
+func createProjectStructure(baseDir string) error {
 	dirs := []string{
 		baseDir,
-		filepath.Join(baseDir, "api"),
-		filepath.Join(baseDir, "models"),
-		filepath.Join(baseDir, "server"),
+		filepath.Join(baseDir, "handlers"), // User implementations
+		filepath.Join(baseDir, "generated", "api"),    // Generated interfaces
+		filepath.Join(baseDir, "generated", "models"), // Generated models
+		filepath.Join(baseDir, "generated", "server"), // Generated server
 	}
 
 	for _, dir := range dirs {
@@ -253,4 +90,541 @@ func createDirectories(baseDir string) error {
 	}
 
 	return nil
+}
+
+// GenerateGoModIfNotExists generates go.mod only if it doesn't exist
+func GenerateGoModIfNotExists(baseDir string, moduleName string) error {
+	goModPath := filepath.Join(baseDir, "go.mod")
+	if _, err := os.Stat(goModPath); !os.IsNotExist(err) {
+		return nil // Already exists, don't overwrite
+	}
+
+	goModContent := `module ` + moduleName + `
+
+go 1.22
+
+require (
+	github.com/gin-gonic/gin v1.10.0
+)
+`
+
+	return os.WriteFile(goModPath, []byte(goModContent), 0644)
+}
+
+// GenerateUserMainIfNotExists generates main.go only if it doesn't exist
+func GenerateUserMainIfNotExists(spec *models.OpenAPISpec, baseDir string, moduleName string) error {
+	mainPath := filepath.Join(baseDir, "main.go")
+	if _, err := os.Stat(mainPath); !os.IsNotExist(err) {
+		return nil // Already exists, don't overwrite
+	}
+
+	mainTemplate := `package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"{{.ModuleName}}/generated/server"
+	"{{.ModuleName}}/handlers"
+)
+
+func main() {
+	// Create handler implementation
+	apiHandlers := handlers.NewAPIHandlers()
+	
+	// Create server with handlers
+	srv := server.NewServer(apiHandlers)
+	
+	// Start server in a goroutine
+	go func() {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		
+		log.Printf("Server starting on port %s", port)
+		if err := srv.Start(":" + port); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal for graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	// Graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Server forced to shutdown:", err)
+	}
+
+	log.Println("Server exited")
+}
+`
+
+	tmpl, err := template.New("main").Parse(mainTemplate)
+	if err != nil {
+		return err
+	}
+
+	data := struct {
+		ModuleName string
+	}{
+		ModuleName: moduleName,
+	}
+
+	f, err := os.Create(mainPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return tmpl.Execute(f, data)
+}
+
+// GenerateInterfaces generates the API interfaces in generated/api/
+func GenerateInterfaces(spec *models.OpenAPISpec, baseDir string, moduleName string) error {
+	interfaceTemplate := `// Code generated by gopenapi. DO NOT EDIT.
+
+package api
+
+import "github.com/gin-gonic/gin"
+
+// APIHandlers defines the interface that users must implement
+type APIHandlers interface {
+{{range .Methods}}
+	// {{.HandlerName}} {{.Comment}}
+	{{.HandlerName}}(c *gin.Context{{.Parameters}})
+{{end}}
+}
+
+// APIMethod represents an API endpoint
+type APIMethod struct {
+	Method      string
+	Path        string
+	HandlerName string
+}
+
+// GetAPIMethods returns all API methods for documentation/routing
+func GetAPIMethods() []APIMethod {
+	return []APIMethod{
+{{range .Methods}}
+		{
+			Method:      "{{.Method}}",
+			Path:        "{{.Path}}",
+			HandlerName: "{{.HandlerName}}",
+		},
+{{end}}
+	}
+}
+`
+
+	tmpl, err := template.New("interface").Parse(interfaceTemplate)
+	if err != nil {
+		return err
+	}
+
+	// Generate methods from OpenAPI spec
+	var methods []struct {
+		Method      string
+		Path        string
+		HandlerName string
+		Comment     string
+		Parameters  string
+	}
+
+	for path, operations := range spec.Paths {
+		for method, op := range operations {
+			handlerName := utils.ToCamelCase(op.OperationID)
+
+			// Build comment
+			comment := "handles " + strings.ToUpper(method) + " " + path
+			if op.Summary != "" {
+				comment = op.Summary
+			}
+
+			// Build parameters
+			var params []string
+			for _, param := range op.Parameters {
+				if param.In == "path" {
+					paramType := utils.GetGoType(param.Schema)
+					params = append(params, param.Name+" "+paramType)
+				}
+			}
+
+			paramStr := ""
+			if len(params) > 0 {
+				paramStr = ", " + strings.Join(params, ", ")
+			}
+
+			methods = append(methods, struct {
+				Method      string
+				Path        string
+				HandlerName string
+				Comment     string
+				Parameters  string
+			}{
+				Method:      strings.ToUpper(method),
+				Path:        path,
+				HandlerName: handlerName,
+				Comment:     comment,
+				Parameters:  paramStr,
+			})
+		}
+	}
+
+	data := struct {
+		Methods []struct {
+			Method      string
+			Path        string
+			HandlerName string
+			Comment     string
+			Parameters  string
+		}
+	}{
+		Methods: methods,
+	}
+
+	f, err := os.Create(filepath.Join(baseDir, "generated", "api", "interfaces.go"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return tmpl.Execute(f, data)
+}
+
+// GenerateRouter generates the HTTP router in generated/server/
+func GenerateRouter(spec *models.OpenAPISpec, baseDir string, moduleName string) error {
+	routerTemplate := `// Code generated by gopenapi. DO NOT EDIT.
+
+package server
+
+import (
+	"context"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"{{.ModuleName}}/generated/api"
+)
+
+// Server wraps the HTTP server
+type Server struct {
+	router   *gin.Engine
+	server   *http.Server
+	handlers api.APIHandlers
+}
+
+// NewServer creates a new HTTP server with the provided handlers
+func NewServer(handlers api.APIHandlers) *Server {
+	router := gin.Default()
+	
+	s := &Server{
+		router:   router,
+		handlers: handlers,
+	}
+	
+	s.setupRoutes()
+	s.setupServer()
+	
+	return s
+}
+
+// Start starts the HTTP server
+func (s *Server) Start(addr string) error {
+	s.server.Addr = addr
+	return s.server.ListenAndServe()
+}
+
+// Shutdown gracefully shuts down the server
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.server.Shutdown(ctx)
+}
+
+// GetRouter returns the underlying Gin router for advanced configuration
+func (s *Server) GetRouter() *gin.Engine {
+	return s.router
+}
+
+// setupServer configures the HTTP server
+func (s *Server) setupServer() {
+	s.server = &http.Server{
+		Handler:      s.router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+}
+
+// setupRoutes configures all API routes
+func (s *Server) setupRoutes() {
+{{range .Routes}}
+	// {{.Comment}}
+	s.router.{{.Method}}("{{.GinPath}}", func(c *gin.Context) {
+		{{if .HasPathParams}}{{range .PathParams}}{{.Name}} := c.Param("{{.Name}}")
+		{{end}}s.handlers.{{.HandlerName}}(c{{range .PathParams}}, {{.Name}}{{end}}){{else}}s.handlers.{{.HandlerName}}(c){{end}}
+	})
+{{end}}
+}
+`
+
+	tmpl, err := template.New("router").Parse(routerTemplate)
+	if err != nil {
+		return err
+	}
+
+	var routes []struct {
+		Method        string
+		Path          string
+		GinPath       string
+		HandlerName   string
+		Comment       string
+		HasPathParams bool
+		PathParams    []struct {
+			Name string
+			Type string
+		}
+	}
+
+	for path, operations := range spec.Paths {
+		for method, op := range operations {
+			ginPath := utils.ConvertPathToGin(path)
+			handlerName := utils.ToCamelCase(op.OperationID)
+
+			comment := strings.ToUpper(method) + " " + path
+			if op.Summary != "" {
+				comment += " - " + op.Summary
+			}
+
+			var pathParams []struct {
+				Name string
+				Type string
+			}
+			for _, param := range op.Parameters {
+				if param.In == "path" {
+					pathParams = append(pathParams, struct {
+						Name string
+						Type string
+					}{
+						Name: param.Name,
+						Type: utils.GetGoType(param.Schema),
+					})
+				}
+			}
+
+			routes = append(routes, struct {
+				Method        string
+				Path          string
+				GinPath       string
+				HandlerName   string
+				Comment       string
+				HasPathParams bool
+				PathParams    []struct {
+					Name string
+					Type string
+				}
+			}{
+				Method:        strings.ToUpper(method),
+				Path:          path,
+				GinPath:       ginPath,
+				HandlerName:   handlerName,
+				Comment:       comment,
+				HasPathParams: len(pathParams) > 0,
+				PathParams:    pathParams,
+			})
+		}
+	}
+
+	data := struct {
+		ModuleName string
+		Routes     []struct {
+			Method        string
+			Path          string
+			GinPath       string
+			HandlerName   string
+			Comment       string
+			HasPathParams bool
+			PathParams    []struct {
+				Name string
+				Type string
+			}
+		}
+	}{
+		ModuleName: moduleName,
+		Routes:     routes,
+	}
+
+	f, err := os.Create(filepath.Join(baseDir, "generated", "server", "router.go"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return tmpl.Execute(f, data)
+}
+
+// GenerateHandlerTemplates generates handler templates ONLY if they don't exist
+func GenerateHandlerTemplates(spec *models.OpenAPISpec, baseDir string, moduleName string) error {
+	handlerTemplate := `package handlers
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"{{.ModuleName}}/generated/api"{{if .HasModels}}
+	"{{.ModuleName}}/generated/models"{{end}}
+)
+
+// APIHandlers implements the api.APIHandlers interface
+type APIHandlers struct {
+	// Add your dependencies here:
+	// db     *sql.DB
+	// logger *slog.Logger
+	// cache  redis.Client
+}
+
+// NewAPIHandlers creates a new APIHandlers instance
+func NewAPIHandlers() api.APIHandlers {
+	return &APIHandlers{
+		// Initialize your dependencies here
+	}
+}
+
+{{range .Methods}}
+// {{.HandlerName}} {{.Comment}}
+func (h *APIHandlers) {{.HandlerName}}(c *gin.Context{{.Parameters}}) {
+	// TODO: Implement your business logic here
+	
+	{{.ExampleCode}}
+}
+
+{{end}}`
+
+	// Check if handlers directory has any .go files
+	handlersDir := filepath.Join(baseDir, "handlers")
+	entries, err := os.ReadDir(handlersDir)
+	if err != nil {
+		return err
+	}
+
+	// If any .go files exist, don't generate
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".go") {
+			return nil // User already has handlers, don't overwrite
+		}
+	}
+
+	tmpl, err := template.New("handlers").Parse(handlerTemplate)
+	if err != nil {
+		return err
+	}
+
+	// Generate methods
+	var methods []struct {
+		HandlerName string
+		Comment     string
+		Parameters  string
+		ExampleCode string
+	}
+
+	for path, operations := range spec.Paths {
+		for method, op := range operations {
+			handlerName := utils.ToCamelCase(op.OperationID)
+
+			comment := "handles " + strings.ToUpper(method) + " " + path
+			if op.Summary != "" {
+				comment = op.Summary
+			}
+
+			// Build parameters
+			var params []string
+			for _, param := range op.Parameters {
+				if param.In == "path" {
+					paramType := utils.GetGoType(param.Schema)
+					params = append(params, param.Name+" "+paramType)
+				}
+			}
+
+			paramStr := ""
+			if len(params) > 0 {
+				paramStr = ", " + strings.Join(params, ", ")
+			}
+
+			// Generate example code based on method
+			var exampleCode string
+			switch strings.ToUpper(method) {
+			case "GET":
+				exampleCode = `c.JSON(http.StatusOK, gin.H{
+		"message": "Success",
+		"data":    nil, // Replace with your data
+	})`
+			case "POST":
+				exampleCode = `// Example: Parse request body
+	// var request models.SomeModel
+	// if err := c.ShouldBindJSON(&request); err != nil {
+	//     c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	//     return
+	// }
+	
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Created successfully",
+	})`
+			case "PUT":
+				exampleCode = `c.JSON(http.StatusOK, gin.H{
+		"message": "Updated successfully",
+	})`
+			case "DELETE":
+				exampleCode = `c.JSON(http.StatusNoContent, nil)`
+			default:
+				exampleCode = `c.JSON(http.StatusNotImplemented, gin.H{
+		"error": "Not implemented yet",
+	})`
+			}
+
+			methods = append(methods, struct {
+				HandlerName string
+				Comment     string
+				Parameters  string
+				ExampleCode string
+			}{
+				HandlerName: handlerName,
+				Comment:     comment,
+				Parameters:  paramStr,
+				ExampleCode: exampleCode,
+			})
+		}
+	}
+
+	data := struct {
+		ModuleName string
+		HasModels  bool
+		Methods    []struct {
+			HandlerName string
+			Comment     string
+			Parameters  string
+			ExampleCode string
+		}
+	}{
+		ModuleName: moduleName,
+		HasModels:  len(spec.Components.Schemas) > 0,
+		Methods:    methods,
+	}
+
+	f, err := os.Create(filepath.Join(baseDir, "handlers", "api.go"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return tmpl.Execute(f, data)
 }

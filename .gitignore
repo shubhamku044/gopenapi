@@ -11,6 +11,8 @@
 # Project binary (but not source files)
 /gopenapi
 
+demo-*/
+
 # Test binary, built with `go test -c`
 *.test
 

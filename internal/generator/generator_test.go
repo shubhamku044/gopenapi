@@ -173,7 +173,7 @@ func TestGenerateGoMod(t *testing.T) {
 	tempDir := t.TempDir()
 	moduleName := "test/module"
 
-	err := GenerateGoMod(tempDir, moduleName)
+	err := GenerateGoModIfNotExists(tempDir, moduleName)
 	if err != nil {
 		t.Fatalf("GenerateGoMod failed: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestGenerateGoMod(t *testing.T) {
 func TestCreateDirectories(t *testing.T) {
 	tempDir := t.TempDir()
 
-	err := createDirectories(tempDir)
+	err := createProjectStructure(tempDir)
 	if err != nil {
 		t.Fatalf("createDirectories failed: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestGenerateImplementationTemplate(t *testing.T) {
 		t.Fatalf("Failed to create api directory: %v", err)
 	}
 
-	err = GenerateImplementationTemplate(spec, tempDir, moduleName)
+	err = GenerateHandlerTemplates(spec, tempDir, moduleName)
 	if err != nil {
 		t.Fatalf("GenerateImplementationTemplate failed: %v", err)
 	}
