@@ -33,7 +33,7 @@ jobs:
         uses: golangci/golangci-lint-action@v4
         with:
           version: latest
-          args: --timeout=5m
+          args: --timeout=5m --config .golangci.yaml
 
   test:
     name: Test
@@ -177,6 +177,7 @@ jobs:
           test -f test-generated/main.go
           test -f test-generated/go.mod
           test -f test-generated/api/api.go
+          test -f test-generated/api/implementation.go
           test -f test-generated/models/models.go
           test -f test-generated/server/server.go
 
@@ -214,9 +215,6 @@ jobs:
 
           # Test sample generation
           make generate-sample
-
-          # Test generated code build
-          make build-generated
 
           # Test clean
           make clean

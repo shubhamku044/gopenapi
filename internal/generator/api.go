@@ -10,16 +10,19 @@ import (
 	"github.com/shubhamku044/gopenapi/pkg/utils"
 )
 
-type Handler struct {
-	Method        string
-	Path          string
-	HandlerName   string
-	Summary       string
-	Description   string
-	PathParams    []PathParam
-	HasPathParams bool
+const (
+	pathParameterType = "path"
+)
+
+// APIMethod represents an API method for generation
+type APIMethod struct {
+	Name        string
+	HandlerName string
+	Comment     string
+	Parameters  string
 }
 
+// GenerateAPIFile generates the API interface file
 func GenerateAPIFile(spec *models.OpenAPISpec, baseDir string) error {
 	apiTemplate := `package api
 
@@ -27,31 +30,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// API defines the interface for all API operations
+// API defines the interface for API operations
 type API interface {
-	{{range .Handlers}}
-	// {{.HandlerName}} handles {{.Method}} {{.Path}}
-	{{if .Summary}}// {{.Summary}}{{end}}
-	{{if .Description}}// {{.Description}}{{end}}
-	{{.HandlerName}}(c *gin.Context{{if .HasPathParams}}, {{range $index, $param := .PathParams}}{{if $index}}, {{end}}{{.Name}} {{.Type}}{{end}}{{end}})
-	{{end}}
-}
-
-// DefaultAPI provides a default implementation of the API interface
-type DefaultAPI struct {}
-
-// NewAPI creates a new API handler
-func NewAPI() API {
-	return &DefaultAPI{}
-}
-
-{{range .Handlers}}
-// {{.HandlerName}} handles {{.Method}} {{.Path}}
-func (a *DefaultAPI) {{.HandlerName}}(c *gin.Context{{if .HasPathParams}}, {{range $index, $param := .PathParams}}{{if $index}}, {{end}}{{.Name}} {{.Type}}{{end}}{{end}}) {
-	// TODO: Implement me
-	c.JSON(200, gin.H{"message": "Not implemented"})
-}
+{{range .Methods}}
+	{{.Comment}}
+	{{.HandlerName}}(c *gin.Context{{.Parameters}})
 {{end}}
+}
 `
 
 	tmpl, err := template.New("api").Parse(apiTemplate)
@@ -59,35 +44,48 @@ func (a *DefaultAPI) {{.HandlerName}}(c *gin.Context{{if .HasPathParams}}, {{ran
 		return err
 	}
 
-	var handlers []Handler
+	// Generate methods from OpenAPI spec
+	var methods []APIMethod
 	for path, operations := range spec.Paths {
 		for method, op := range operations {
-			var pathParams []PathParam
+			handlerName := utils.ToCamelCase(op.OperationID)
+
+			// Build comment
+			comment := "// " + handlerName + " handles " + strings.ToUpper(method) + " " + path
+			if op.Summary != "" {
+				comment += "\n\t// " + op.Summary
+			}
+			if op.Description != "" {
+				comment += "\n\t// " + op.Description
+			}
+
+			// Build parameters
+			var params []string
 			for _, param := range op.Parameters {
-				if param.In == "path" {
-					pathParams = append(pathParams, PathParam{
-						Name: param.Name,
-						Type: utils.GetGoType(param.Schema),
-					})
+				if param.In == pathParameterType {
+					paramType := utils.GetGoType(param.Schema)
+					params = append(params, param.Name+" "+paramType)
 				}
 			}
 
-			handlers = append(handlers, Handler{
-				Method:        strings.ToUpper(method),
-				Path:          path,
-				HandlerName:   utils.ToCamelCase(op.OperationID),
-				Summary:       op.Summary,
-				Description:   op.Description,
-				PathParams:    pathParams,
-				HasPathParams: len(pathParams) > 0,
+			paramStr := ""
+			if len(params) > 0 {
+				paramStr = ", " + strings.Join(params, ", ")
+			}
+
+			methods = append(methods, APIMethod{
+				Name:        strings.ToUpper(method) + " " + path,
+				HandlerName: handlerName,
+				Comment:     comment,
+				Parameters:  paramStr,
 			})
 		}
 	}
 
 	data := struct {
-		Handlers []Handler
+		Methods []APIMethod
 	}{
-		Handlers: handlers,
+		Methods: methods,
 	}
 
 	f, err := os.Create(filepath.Join(baseDir, "api", "api.go"))

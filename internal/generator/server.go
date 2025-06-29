@@ -8,8 +8,6 @@ import (
 
 	"github.com/shubhamku044/gopenapi/internal/models"
 	"github.com/shubhamku044/gopenapi/pkg/utils"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 type PathParam struct {
@@ -103,7 +101,6 @@ func (s *Server) setupRoutes() {
 	}
 
 	var routes []Route
-	caser := cases.Title(language.English)
 	for path, operations := range spec.Paths {
 		for method, op := range operations {
 			ginPath := utils.ConvertPathToGin(path)
@@ -120,7 +117,7 @@ func (s *Server) setupRoutes() {
 			}
 
 			routes = append(routes, Route{
-				Method:        caser.String(strings.ToUpper(method)),
+				Method:        strings.ToUpper(method),
 				Path:          ginPath,
 				HandlerName:   handlerName,
 				PathParams:    pathParams,
