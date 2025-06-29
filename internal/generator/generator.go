@@ -11,18 +11,36 @@ import (
 type Config struct {
 	OutputDir   string
 	PackageName string
+	ModuleName  string // Add module name for proper imports
 }
 
 // GenerateCode generates all code from an OpenAPI spec
 func GenerateCode(spec *models.OpenAPISpec, config Config) error {
+	// If no module name is provided, create a default one based on output directory
+	if config.ModuleName == "" {
+		config.ModuleName = config.PackageName
+	}
+
 	// Create the output directory structure
 	err := createDirectories(config.OutputDir)
 	if err != nil {
 		return err
 	}
 
+	// Generate go.mod file for the generated code
+	err = GenerateGoMod(config.OutputDir, config.ModuleName)
+	if err != nil {
+		return err
+	}
+
+	// Generate main.go file (entrypoint)
+	err = GenerateMainFile(spec, config.OutputDir, config.ModuleName)
+	if err != nil {
+		return err
+	}
+
 	// Generate server
-	err = GenerateServerFile(spec, config.OutputDir, config.PackageName)
+	err = GenerateServerFile(spec, config.OutputDir, config.PackageName, config.ModuleName)
 	if err != nil {
 		return err
 	}
@@ -46,6 +64,27 @@ func GenerateCode(spec *models.OpenAPISpec, config Config) error {
 	}
 
 	return nil
+}
+
+// GenerateGoMod generates a go.mod file for the generated code
+func GenerateGoMod(baseDir string, moduleName string) error {
+	goModContent := `module ` + moduleName + `
+
+go 1.22
+
+require (
+	github.com/gin-gonic/gin v1.10.0
+)
+`
+
+	f, err := os.Create(filepath.Join(baseDir, "go.mod"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(goModContent)
+	return err
 }
 
 // createDirectories creates the output directory structure

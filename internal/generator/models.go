@@ -9,11 +9,25 @@ import (
 	"github.com/shubhamku044/gopenapi/pkg/utils"
 )
 
-// GenerateModels generates model files from OpenAPI schemas
 func GenerateModels(spec *models.OpenAPISpec, baseDir string) error {
-	// For MVP, we'll create a simple models file with placeholders
-	// A complete implementation would parse schemas from spec.Components.Schemas
+	needsTimeImport := false
+	for _, schema := range spec.Components.Schemas {
+		if hasTimeFields(schema) {
+			needsTimeImport = true
+			break
+		}
+	}
+
+	imports := ""
+	if needsTimeImport {
+		imports = `import (
+	"time"
+)`
+	}
+
 	modelsTemplate := `package models
+
+` + imports + `
 
 // This file contains the data models for the API
 // In a real implementation, these would be fully generated from the schema definitions
@@ -39,7 +53,6 @@ type {{$name}} struct {
 {{end}}
 `
 
-	// Create functions for the template
 	funcMap := template.FuncMap{
 		"toCamelCase": utils.ToCamelCase,
 		"getGoType":   func(s models.Schema) string { return utils.GetGoType(s) },
@@ -63,4 +76,22 @@ type {{$name}} struct {
 	defer f.Close()
 
 	return tmpl.Execute(f, data)
+}
+
+func hasTimeFields(schema models.Schema) bool {
+	if schema.Type == "string" && (schema.Format == "date" || schema.Format == "date-time") {
+		return true
+	}
+
+	for _, propSchema := range schema.Properties {
+		if hasTimeFields(propSchema) {
+			return true
+		}
+	}
+
+	if schema.Items != nil && hasTimeFields(*schema.Items) {
+		return true
+	}
+
+	return false
 }

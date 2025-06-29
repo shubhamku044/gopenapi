@@ -10,13 +10,11 @@ import (
 	"github.com/shubhamku044/gopenapi/pkg/utils"
 )
 
-// PathParam represents a path parameter for route generation
 type PathParam struct {
 	Name string
 	Type string
 }
 
-// Route represents a route for the server
 type Route struct {
 	Method        string
 	Path          string
@@ -25,13 +23,12 @@ type Route struct {
 	HasPathParams bool
 }
 
-// GenerateServerFile generates the server file
-func GenerateServerFile(spec *models.OpenAPISpec, baseDir string, packageName string) error {
+func GenerateServerFile(spec *models.OpenAPISpec, baseDir string, packageName string, moduleName string) error {
 	serverTemplate := `package server
 
 import (
 	"github.com/gin-gonic/gin"
-	"{{.PackageName}}/generated/api"
+	"{{.ModuleName}}/api"
 )
 
 // Server represents the API server
@@ -103,14 +100,12 @@ func (s *Server) setupRoutes() {
 		return err
 	}
 
-	// Prepare route data
 	var routes []Route
 	for path, operations := range spec.Paths {
 		for method, op := range operations {
 			ginPath := utils.ConvertPathToGin(path)
 			handlerName := utils.ToCamelCase(op.OperationID)
 
-			// Extract path parameters
 			var pathParams []PathParam
 			for _, param := range op.Parameters {
 				if param.In == "path" {
@@ -133,9 +128,11 @@ func (s *Server) setupRoutes() {
 
 	data := struct {
 		PackageName string
+		ModuleName  string
 		Routes      []Route
 	}{
 		PackageName: packageName,
+		ModuleName:  moduleName,
 		Routes:      routes,
 	}
 
