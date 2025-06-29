@@ -20,33 +20,31 @@ func main() {
 		log.Fatal("Please provide an OpenAPI specification file with --spec")
 	}
 
-	// Parse the OpenAPI specification
 	spec, err := parser.ParseSpecFile(*specFile)
 	if err != nil {
 		log.Fatalf("Failed to parse OpenAPI specification: %v", err)
 	}
 
-	// Determine package name
 	pkg := *packageName
 	if pkg == "" {
-		// Try to detect from the output directory
 		absPath, err := filepath.Abs(*outputDir)
 		if err == nil {
-			pkg = filepath.Base(filepath.Dir(absPath))
+			pkg = filepath.Base(absPath)
 		}
 
-		// If still empty, use a default
 		if pkg == "" || pkg == "." {
-			pkg = "gopenapi"
+			pkg = "generated"
 		}
 	}
 
-	// Generate the code
+	moduleName := pkg
+
 	config := generator.Config{
 		OutputDir:   *outputDir,
 		PackageName: pkg,
+		ModuleName:  moduleName,
 	}
-	
+
 	err = generator.GenerateCode(spec, config)
 	if err != nil {
 		log.Fatalf("Failed to generate code: %v", err)
